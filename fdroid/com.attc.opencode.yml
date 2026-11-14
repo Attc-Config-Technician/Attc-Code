@@ -1,0 +1,69 @@
+# DRAFT — Attc Code F-Droid recipe
+#
+# This file documents the metadata F-Droid expects. It is intentionally
+# disabled: F-Droid's build server does not ship the Termux proot runtime
+# (proot, libtalloc, libandroid-shmem) or the Termux headers that
+# tools/build.sh currently consumes. See fdroid/README.md for the two ways to
+# close that gap before opening a merge request against fdroiddata.
+#
+# Validate with: fdroid lint com.attc.opencode
+
+Categories:
+  - Development
+
+License: GPL-3.0-or-later
+
+AuthorName: Attc Config Technician
+
+WebSite: https://attc-config-technician.github.io/Attc-Code/
+SourceCode: https://github.com/Attc-Config-Technician/Attc-Code
+IssueTracker: https://github.com/Attc-Config-Technician/Attc-Code/issues
+Changelog: https://github.com/Attc-Config-Technician/Attc-Code/blob/main/CHANGELOG.md
+
+AutoName: Attc Code
+
+Summary: Ubuntu 24.04 and AI coding CLIs on Android, with an offline wake word
+
+Description: |
+  Attc Code boots a real Ubuntu 24.04 arm64 userland on Android with proot —
+  no root — and runs AI coding CLIs inside it: opencode with the Zen models,
+  Claude Code, Antigravity, Codex, Kimi Code, or a plain terminal.
+
+  Every cold start asks which CLI to launch; a warm session resumes where it
+  left off. The terminal includes Termux-style extra keys, pinch-to-zoom,
+  text selection, attachments, a sessions/files panel and a persistent
+  foreground notification.
+
+  With the voice assistant enabled, saying the configured wake phrase (default
+  “Hey Attc”) with the screen off arms command capture. Wake-word detection is
+  a personal, fully offline MFCC/DTW model built from three recordings; the
+  recognised Turkish sentence is typed into the selected CLI session. With
+  Shizuku installed, the bundled attc-ctl helper can open apps and control
+  media through shell commands.
+
+  Shizuku is optional and only needed for phone control. Root is not required.
+  Speech-to-text uses the device recognition service and may go online;
+  wake-word audio never leaves the phone.
+
+RepoType: git
+Repo: https://github.com/Attc-Config-Technician/Attc-Code.git
+
+Builds:
+  - versionName: '5.13'
+    versionCode: 80
+    commit: v5.13
+    subdir: .
+    disable: 'draft: build server needs the Termux proot runtime and headers; see fdroid/README.md'
+    sudo:
+      - apt-get update
+      - apt-get install -y openjdk-17-jdk-headless zip unzip python3 curl
+    build:
+      - export ANDROID_JAR=$$SDK$$/platforms/android-28/android.jar
+      - export PATH=$$SDK$$/build-tools/34.0.0:$$NDK$$/toolchain/bin:$$PATH
+      - export TERMUX_PREFIX=$$TERMUX_PREFIX$$
+      - VERSION_CODE=80 VERSION_NAME=5.13 OUT_DIR=$$OUT$$ DELIVER_DIR= bash tools/build.sh
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 5.13
+CurrentVersionCode: 80

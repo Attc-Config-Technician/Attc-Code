@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Attc Code — Android'de Ubuntu ve yapay zekâ kodlama CLI'leri</title>
+<meta name="description" content="Attc Code, Android telefonunuzda gerçek bir Ubuntu 24.04 arm64 terminali açar; opencode, Claude Code, Codex, Kimi ve Antigravity CLI'lerini çalıştırır. Root gerekmez. Ekran kapalıyken 'Hey Attc' sesli aktivasyonu.">
+<meta property="og:title" content="Attc Code">
+<meta property="og:description" content="Ubuntu + AI coding CLIs, natively on Android. No root. Voice wake word.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="assets/og.png">
+<meta name="theme-color" content="#060a0f">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="nav">
+  <a class="brand" href="#top">
+    <img src="assets/logo.svg" alt="" width="34" height="34">
+    <span>Attc Code</span>
+  </a>
+  <nav>
+    <a href="#features">Özellikler</a>
+    <a href="#voice">Sesli asistan</a>
+    <a href="#screens">Ekranlar</a>
+    <a href="#install">Kurulum</a>
+    <a href="#fdroid">F-Droid</a>
+    <a class="gh" href="https://github.com/Attc-Config-Technician/Attc-Code">GitHub ↗</a>
+  </nav>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="hero-copy">
+      <p class="eyebrow">Android 8+ · arm64 · GPL-3.0 · root gerekmez</p>
+      <h1>Cebinizde gerçek bir <span class="accent">Ubuntu</span>.<br>Yapay zekâ kodlama ekibiniz.</h1>
+      <p class="lead">Attc Code, telefonda proot tabanlı <strong>Ubuntu 24.04 arm64</strong> açar; opencode, Claude Code, Codex, Kimi ve Antigravity CLI'lerini tek dokunuşla başlatır. Ekran kapalıyken bile <strong>“Hey Attc”</strong> diyerek komut verirsiniz.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/Attc-Config-Technician/Attc-Code/releases/latest">APK indir <span>5.13</span></a>
+        <a class="btn ghost" href="https://github.com/Attc-Config-Technician/Attc-Code">Kaynak kodu</a>
+      </div>
+      <p class="fineprint">sha256 <code id="sha">f798e35ab8e4a183fbe510f378dd219ac5ebec877295b43b53f59f8e195b31d6</code>
+        <button class="copy" data-copy="f798e35ab8e4a183fbe510f378dd219ac5ebec877295b43b53f59f8e195b31d6" aria-label="sha256 kopyala">kopyala</button></p>
+    </div>
+    <div class="hero-media">
+      <video controls preload="none" poster="assets/poster.jpg" playsinline>
+        <source src="assets/attc-code-ad.mp4" type="video/mp4">
+        Tarayıcınız video etiketini desteklemiyor.
+      </video>
+      <div class="video-caption">52 saniyelik tanıtım · 720p</div>
+    </div>
+  </section>
+
+  <section class="strip" aria-label="Desteklenen CLI'ler">
+    <span>opencode</span><i></i><span>Claude Code</span><i></i><span>Codex</span><i></i><span>Kimi Code</span><i></i><span>Antigravity</span><i></i><span>Terminal</span>
+  </section>
+
+  <section id="features" class="section">
+    <div class="section-head">
+      <p class="eyebrow">Neden Attc Code?</p>
+      <h2>Terminal uygulaması değil; taşınabilir bir geliştirme ortamı.</h2>
+    </div>
+    <div class="grid">
+      <article class="card">
+        <div class="ico">▣</div>
+        <h3>Gerçek Ubuntu 24.04</h3>
+        <p>proot ile çalışan arm64 userland. apt, python, node, git ve derleyiciler gerçek binary olarak çalışır; emülatör katmanı yok.</p>
+      </article>
+      <article class="card">
+        <div class="ico">⌘</div>
+        <h3>Tek ekranda CLI seçimi</h3>
+        <p>Her soğuk açılışta opencode, Claude Code, Antigravity, Codex, Kimi veya düz terminal. Sıcak oturum kaldığı yerden devam eder.</p>
+      </article>
+      <article class="card">
+        <div class="ico">◉</div>
+        <h3>Ekran kapalıyken sesli komut</h3>
+        <p>“Hey Attc” uyanma kelimesi tamamen çevrimdışı MFCC/DTW ile tanınır. Komut Türkçe konuşmadan yazıya çevrilip seçili CLI'ye gider.</p>
+      </article>
+      <article class="card">
+        <div class="ico">⇄</div>
+        <h3>Telefon kontrol köprüsü</h3>
+        <p>Shizuku varsa <code>attc-ctl</code> ile uygulama açma, medya oynatma, dokunma ve ekran görüntüsü gibi shell işleri ajandan yapılabilir.</p>
+      </article>
+      <article class="card">
+        <div class="ico">⌁</div>
+        <h3>Termux hissi</h3>
+        <p>Ekstra tuş satırı, yakınlaştırma, metin seçimi, pano, dosya iliştirme ve oturumlar arası geçiş; hepsi tek elle kullanılacak şekilde.</p>
+      </article>
+      <article class="card">
+        <div class="ico">◎</div>
+        <h3>Pil ve ağ kontrolü</h3>
+        <p>Ekran kapalı dinleme için kısmi wake lock; isteğe bağlı Wi-Fi kilidi, pil muafiyeti ve otomatik kota sıfırlama.</p>
+      </article>
+    </div>
+  </section>
+
+  <section id="voice" class="section voice">
+    <div class="voice-copy">
+      <p class="eyebrow">Siri benzeri, ama sizin sesinizle</p>
+      <h2>“Hey Attc” → dinle → yaz → seçili CLI'de çalıştır.</h2>
+      <p>Uyanma kelimesi bulut anahtarı istemez. Telefonda üç kez kaydettiğiniz örneklerden kişisel bir MFCC/DTW modeli çıkarılır; kelimeyi ve dil modelini siz seçersiniz. Uyandıktan sonra Google konuşma tanıma (tr-TR) cümleyi yazıya çevirir ve en son kullandığınız CLI/model oturumuna iletir.</p>
+      <ul class="checks">
+        <li>Uyanma kelimesi ayarlardan seçilir: hazır ifadeler veya özel metin.</li>
+        <li>Ekran kapalı ve kilitliyken çalışır; boot sonrası otomatik başlar.</li>
+        <li>Mikrofon izni ilk açılışta istenir; ses özelliği varsayılan kapalıdır.</li>
+        <li>“YouTube Music'i aç ve şu şarkıyı çal” gibi görevler <code>attc-ctl</code> köprüsüne talimat olarak eklenir.</li>
+      </ul>
+    </div>
+    <div class="voice-shot">
+      <img src="assets/screenshot-settings.png" alt="Attc Code ayarlar ekranı: sesli asistan, uyanma kelimesi ve CLI seçimi">
+    </div>
+  </section>
+
+  <section id="screens" class="section">
+    <div class="section-head">
+      <p class="eyebrow">Ekranlar</p>
+      <h2>Karanlık tema, tek elle kullanım.</h2>
+    </div>
+    <div class="shots">
+      <figure>
+        <img src="assets/screenshot-chooser.png" alt="CLI seçim ekranı">
+        <figcaption>Her açılışta CLI seçimi</figcaption>
+      </figure>
+      <figure>
+        <img src="assets/screenshot-settings.png" alt="Ayarlar ve sesli asistan">
+        <figcaption>Sesli asistan, uyanma kelimesi ve güvenlik ayarları</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="install" class="section install">
+    <div class="section-head">
+      <p class="eyebrow">Kurulum</p>
+      <h2>Üç adımda çalışır.</h2>
+    </div>
+    <ol class="steps">
+      <li>
+        <span>01</span>
+        <h3>APK'yı indirin</h3>
+        <p>GitHub Releases sayfasından imzalı APK'yı indirin. Android 8.0+ ve arm64 gerekir. Bilinmeyen kaynak iznini yalnızca bu kurulum için açın.</p>
+      </li>
+      <li>
+        <span>02</span>
+        <h3>Açın ve CLI seçin</h3>
+        <p>İlk açılışta Ubuntu kök dosya sistemi hazırlanır. Bağlantı varsa seçtiğiniz CLI otomatik kurulur; sonraki açılışlarda seçim ekranı yine gelir.</p>
+      </li>
+      <li>
+        <span>03</span>
+        <h3>Sesi açın (isteğe bağlı)</h3>
+        <p>Ayarlar → Voice assistant → mikrofon izni → üç kez “Hey Attc” kaydı. Ardından uyanma kelimesini değiştirebilir, pil muafiyeti verebilirsiniz.</p>
+      </li>
+    </ol>
+    <div class="note">
+      <strong>Shizuku isteğe bağlıdır.</strong> Terminal ve CLI'ler Shizuku olmadan da çalışır. Telefon kontrolü (uygulama açma, medya, dokunma) için Shizuku kurup Attc Code'a izin verin.
+    </div>
+  </section>
+
+  <section id="fdroid" class="section fdroid">
+    <div>
+      <p class="eyebrow">F-Droid</p>
+      <h2>Açık kaynak, tekrarlanabilir derleme hedefi.</h2>
+      <p>Depo GPL-3.0 ile lisanslanır. F-Droid mağazası için <code>fastlane</code> metinleri, ekran görüntüleri, video ve <code>fdroid/com.attc.opencode.yml</code> tarifi depoda hazır. Resmî listelemeye kabul için F-Droid'in kendi derleme sunucusunda üretilen APK gerekir; süreç <a href="https://github.com/Attc-Config-Technician/Attc-Code/blob/main/fdroid/README.md">fdroid/README.md</a> içinde adım adım anlatılır.</p>
+      <div class="badges">
+        <span class="badge muted">F-Droid: hazırlık aşamasında</span>
+        <span class="badge">GPL-3.0-or-later</span>
+        <span class="badge">arm64</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section build">
+    <div class="section-head">
+      <p class="eyebrow">Geliştirici</p>
+      <h2>Gradle yok; tek betikle derleme.</h2>
+    </div>
+    <pre><code>git clone https://github.com/Attc-Config-Technician/Attc-Code.git
+cd Attc-Code
+# Termux: aapt2, d8, apksigner, javac ve android.jar gerekir
+VERSION_CODE=80 VERSION_NAME=5.13 bash tools/build.sh</code></pre>
+    <p class="fineprint">Ayrıntılar ve ortam değişkenleri için <a href="https://github.com/Attc-Config-Technician/Attc-Code#build">README</a>. Derleme çıktısı <code>dist/</code>, cihaza teslim kopyası <code>/storage/emulated/0/ATTC OPENCODE/</code>.</p>
+  </section>
+</main>
+
+<footer>
+  <div class="foot-brand">
+    <img src="assets/logo.svg" alt="" width="28" height="28">
+    <span>Attc Code</span>
+  </div>
+  <p>Android'de Ubuntu ve yapay zekâ kodlama CLI'leri. Root gerekmez.</p>
+  <div class="foot-links">
+    <a href="https://github.com/Attc-Config-Technician/Attc-Code">GitHub</a>
+    <a href="https://github.com/Attc-Config-Technician/Attc-Code/releases">Releases</a>
+    <a href="https://github.com/Attc-Config-Technician/Attc-Code/blob/main/LICENSE">GPL-3.0</a>
+    <a href="https://github.com/Attc-Config-Technician/Attc-Code/blob/main/fdroid/README.md">F-Droid</a>
+  </div>
+  <p class="small">Ubuntu, Canonical Ltd.'nin tescilli markasıdır. Claude, OpenAI, Moonshot ve Google markaları ilgili sahiplerine aittir. Bu proje bağımsızdır.</p>
+</footer>
+<script src="app.js"></script>
+</body>
+</html>

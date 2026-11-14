@@ -1,0 +1,3 @@
+- Ayarlardan seçilebilir uyanma kelimesi (hazır ifadeler + özel metin)
+- Mikrofon izni akışı ve kalıcı red durumunda uygulama ayarlarına yönlendirme
+- Bildirim ve durum metinleri yapılandırılan kelimeyi kullanır

@@ -1,0 +1,35 @@
+Attc Code boots a real Ubuntu 24.04 arm64 userland on Android with proot, without root, and runs AI coding CLIs inside it.
+
+On every cold start you choose what to launch:
+• Attc Code — opencode with the Zen models
+• Claude Code — Anthropic CLI through the in-app gateway
+• Antigravity — Google's agent CLI
+• Codex — OpenAI coding CLI
+• Kimi Code — Moonshot coding CLI
+• Terminal — a plain Ubuntu shell
+
+A warm session resumes where it left off. Fully Close ends it, and the next open asks again.
+
+VOICE ASSISTANT
+Say “Hey Attc” with the screen off. The wake word is a personal, fully offline model built from three recordings (MFCC/DTW), so no cloud key is required. The phrase is selectable in Settings: presets or custom text. After the wake word, Turkish speech is transcribed by the device recognition service and typed into the selected CLI session, keeping the model you last selected there. With Shizuku installed, the bundled attc-ctl helper lets the agent open apps and control media through shell commands.
+
+TERMINAL FEATURES
+• Termux-style extra keys and two-row key bar
+• Tap-to-open keyboard, pinch-to-zoom, long-press text selection
+• Attachments from the system file picker and gallery
+• Sessions and produced files panel
+• Persistent foreground notification with keep-awake and fully-close actions
+• /root/attc is bound to /storage/emulated/0/ATTC OPENCODE, and device paths such as /sdcard and /system are visible inside Ubuntu
+• Optional fake-IP mode for privacy inside the guest
+
+REQUIREMENTS
+Android 8.0 or newer, arm64 device, about 2 GB free storage for the Ubuntu userland. Shizuku is optional and only needed for phone control (opening apps, media, input). Root is not required.
+
+PERMISSIONS
+• Microphone: only when you enable the voice assistant; used for the wake word and command capture.
+• Notifications: foreground service status.
+• All files access: optional, for the shared folder and attachments.
+
+Speech recognition may use the device's Google recognition service and can go online. Wake-word detection is offline; voice templates stay on the phone.
+
+Attc Code is free software under GPL-3.0-or-later. Source code, issue tracker and releases: https://github.com/Attc-Config-Technician/Attc-Code

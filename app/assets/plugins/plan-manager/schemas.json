@@ -1,0 +1,361 @@
+{
+  "plan_create": {
+    "type": "object",
+    "properties": {
+      "metadata": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "feature",
+              "bug",
+              "refactor",
+              "docs"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 500
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "type",
+          "description",
+          "title"
+        ]
+      },
+      "implementation": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "minLength": 10
+          },
+          "phases": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 3,
+                  "maxLength": 100
+                },
+                "tasks": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "content": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 150
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "pending",
+                          "in_progress",
+                          "done"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "content",
+                      "status"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "name",
+                "tasks"
+              ]
+            }
+          }
+        },
+        "required": [
+          "description",
+          "phases"
+        ]
+      },
+      "specifications": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "minLength": 10
+          },
+          "functionals": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            }
+          },
+          "nonFunctionals": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            }
+          },
+          "acceptanceCriterias": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            }
+          },
+          "outOfScope": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            }
+          }
+        },
+        "required": [
+          "description",
+          "functionals",
+          "nonFunctionals",
+          "acceptanceCriterias",
+          "outOfScope"
+        ]
+      }
+    },
+    "required": [
+      "metadata",
+      "implementation",
+      "specifications"
+    ]
+  },
+  "plan_list": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "default": "active",
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "pending",
+              "in_progress",
+              "done"
+            ]
+          },
+          {
+            "type": "string",
+            "enum": [
+              "active",
+              "all"
+            ]
+          }
+        ]
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "feature",
+          "bug",
+          "refactor",
+          "docs"
+        ]
+      }
+    }
+  },
+  "plan_read": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "view": {
+        "default": "full",
+        "type": "string",
+        "enum": [
+          "summary",
+          "spec",
+          "plan",
+          "full"
+        ]
+      }
+    },
+    "required": [
+      "id"
+    ]
+  },
+  "plan_update": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[a-z0-9]+(?:[_-][a-z0-9]+)*$"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "in_progress",
+          "done"
+        ]
+      },
+      "specifications": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "minLength": 10
+          },
+          "functionals": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            }
+          },
+          "nonFunctionals": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            }
+          },
+          "acceptanceCriterias": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            }
+          },
+          "outOfScope": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            }
+          }
+        },
+        "required": [
+          "description",
+          "functionals",
+          "nonFunctionals",
+          "acceptanceCriterias",
+          "outOfScope"
+        ]
+      },
+      "implementation": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "minLength": 10
+          },
+          "phases": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 3,
+                  "maxLength": 100
+                },
+                "tasks": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "content": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 150
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "pending",
+                          "in_progress",
+                          "done"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "content",
+                      "status"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "name",
+                "tasks"
+              ]
+            }
+          }
+        },
+        "required": [
+          "description",
+          "phases"
+        ]
+      },
+      "taskUpdates": {
+        "minItems": 1,
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 150
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "in_progress",
+                "done"
+              ]
+            }
+          },
+          "required": [
+            "content",
+            "status"
+          ]
+        }
+      }
+    },
+    "required": [
+      "id"
+    ]
+  }
+}

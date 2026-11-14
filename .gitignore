@@ -1,35 +1,35 @@
-# Gradle files
-.gradle/
+# Local build output and media scratch space
+.work/
+ad/
 build/
-.kotlin/
-
-# Local configuration file (sdk path, etc)
-local.properties
-
-# Log/OS Files
+dist/
+*.idsig
 *.log
 
-# Android Studio generated files and folders
+# Signing material — never commit
+*.keystore
+*.jks
+keystore.properties
+
+# IDE / Gradle leftovers (the project builds without Gradle)
+.gradle/
+.idea/
+*.iml
+local.properties
 captures/
 .externalNativeBuild/
 .cxx/
-*.aab
-*.apk
-output-metadata.json
 
-# IntelliJ
-*.iml
-.idea/
-misc.xml
-deploymentTargetDropDown.xml
-render.experimental.xml
+# OS noise
+.DS_Store
+Thumbs.db
 
-# Keystore files
-*.jks
-*.keystore
+# APKs are tracked only in the two intended places:
+#   releases/       — GitHub Release asset source
+#   docs/assets/    — direct download from the Pages site
+!releases/*.apk
+!docs/assets/*.apk
 
-# Google Services (e.g. APIs or Firebase)
-google-services.json
-
-# Android Profiling
-*.hprof
+# Generated at build time (see tools/make_certs.sh and tools/pty.sh)
+app/assets/tls/
+app/jni/libpty.so
