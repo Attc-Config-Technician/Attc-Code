@@ -1,0 +1,3 @@
+- Fixed wake-word detection: the voice-activity thresholds now match the normalised audio scale, so enrolment completes and the phrase is detected.
+- Enrolment logs live microphone levels and detects speech even when the room is louder.
+- Dynamic time warping tolerates faster/slower speech and no longer reports overflow distances.

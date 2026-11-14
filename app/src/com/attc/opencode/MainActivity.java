@@ -1490,6 +1490,22 @@ public final class MainActivity extends Activity implements Hub.Listener {
             Logger.i("test: voice enrol start");
             runVoiceEnrollTest();
         }
+        if (intent.getBooleanExtra("voicediag", false)) {
+            Logger.i("test: voice diagnose start");
+            setVoiceEnabled(false);
+            uiHandler.postDelayed(() -> VoiceEngine.diagnose(this, 8,
+                    new VoiceEngine.EnrollListener() {
+                        @Override
+                        public void onProgress(int done) {
+                        }
+
+                        @Override
+                        public void onDone(boolean ok, String message) {
+                            Logger.i("test: voice diagnose done ok=" + ok
+                                    + " " + message);
+                        }
+                    }), 700L);
+        }
         if (intent.getBooleanExtra("voicewake", false)) {
             Logger.i("test: voice wake");
             sendService(new Intent(this, TerminalService.class)
@@ -1505,6 +1521,7 @@ public final class MainActivity extends Activity implements Hub.Listener {
         String voicePhrase = intent.getStringExtra("voicephrase");
         if (voicePhrase != null) {
             prefs.edit().putString(VoiceEngine.KEY_PHRASE, voicePhrase).apply();
+            setVoiceEnabled(false);
             VoiceEngine.clearTemplates(this);
             Logger.i("test: wake phrase set to \"" + voicePhrase + "\"");
         }

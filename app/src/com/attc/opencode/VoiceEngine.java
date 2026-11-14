@@ -57,6 +57,13 @@ public final class VoiceEngine {
     private static final int END_SILENCE = 65;   // 650 ms
     private static final int COOLDOWN_MS = 2500;
 
+    // Energies below are RMS values of samples normalised to [-1, 1]: a quiet
+    // room sits near 0.0005-0.002, normal speech peaks around 0.03-0.25.
+    private static final double NOISE_INIT = 0.0015;
+    private static final double NOISE_MIN = 0.0002;
+    private static final double NOISE_MAX = 0.15;
+    private static final double VOICED_MIN = 0.004;
+
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
     public interface WakeListener {
@@ -290,10 +297,15 @@ public final class VoiceEngine {
                 int count = 0;
                 FrameBuilder builder = new FrameBuilder();
                 Segmenter segmenter = new Segmenter();
-                long deadline = System.currentTimeMillis() + 40000L;
+                long deadline = System.currentTimeMillis() + 60000L;
+                long nextLog = System.currentTimeMillis() + 2000L;
+                int readErrors = 0;
                 while (templates.size() < 3 && System.currentTimeMillis() < deadline) {
                     int n = r.read(pcm, 0, pcm.length);
                     if (n <= 0) {
+                        if (readErrors++ < 5) {
+                            Logger.i("voice: enrolment read " + n);
+                        }
                         continue;
                     }
                     for (int i = 0; i < n; i++) {
@@ -320,6 +332,11 @@ public final class VoiceEngine {
                             main.post(() -> listener.onProgress(done));
                         }
                     }
+                    if (System.currentTimeMillis() >= nextLog) {
+                        Logger.i("voice: enrol diag " + segmenter.summary()
+                                + " samples=" + templates.size());
+                        nextLog += 2000L;
+                    }
                 }
                 if (templates.size() < 3) {
                     main.post(() -> listener.onDone(false,
@@ -330,7 +347,7 @@ public final class VoiceEngine {
                 float d13 = dtw(templates.get(0), templates.get(2));
                 float d23 = dtw(templates.get(1), templates.get(2));
                 float max = Math.max(d12, Math.max(d13, d23));
-                float threshold = Math.max(0.55f, Math.min(3.0f, max * 1.45f));
+                float threshold = Math.max(0.7f, Math.min(3.0f, max * 1.6f));
                 Logger.i("voice: distances " + d12 + " " + d13 + " " + d23
                         + " -> threshold " + threshold);
                 save(app, templates, threshold);
@@ -354,6 +371,96 @@ public final class VoiceEngine {
                 Logger.i("voice: enrolment ended");
             }
         }, "attc-voice-enrol").start();
+    }
+
+    /**
+     * Records raw microphone energy for a few seconds and logs it, so a silent
+     * or muted microphone can be told apart from a threshold problem without
+     * needing a wake-word recording. Triggered with
+     * {@code adb shell am start ... --ez voicediag true}.
+     */
+    public static void diagnose(Context context, int seconds, EnrollListener listener) {
+        final Context app = context.getApplicationContext();
+        final Handler main = MAIN;
+        if (!hasPermission(app)) {
+            main.post(() -> listener.onDone(false, "microphone permission missing"));
+            return;
+        }
+        new Thread(() -> {
+            AudioRecord r = open();
+            if (r == null) {
+                main.post(() -> listener.onDone(false, "could not open microphone"));
+                return;
+            }
+            try {
+                r.startRecording();
+                Logger.i("voice: diagnose started (" + seconds + "s)");
+                short[] pcm = new short[READ_SAMPLES];
+                double[] samples = new double[FRAME * 3];
+                int count = 0;
+                int reads = 0;
+                FrameBuilder builder = new FrameBuilder();
+                Segmenter segmenter = new Segmenter();
+                long end = System.currentTimeMillis() + seconds * 1000L;
+                long nextLog = System.currentTimeMillis() + 1000L;
+                double intervalPeak = 0;
+                long intervalFrames = 0;
+                while (System.currentTimeMillis() < end) {
+                    int n = r.read(pcm, 0, pcm.length);
+                    if (n <= 0) {
+                        if (reads == 0 || n == AudioRecord.ERROR_DEAD_OBJECT) {
+                            Logger.i("voice: diagnose read " + n);
+                        }
+                        if (n == AudioRecord.ERROR_DEAD_OBJECT) {
+                            break;
+                        }
+                        continue;
+                    }
+                    reads++;
+                    for (int i = 0; i < n; i++) {
+                        samples[count++] = pcm[i] / 32768.0;
+                        if (count >= FRAME) {
+                            Frame f = builder.frame(samples);
+                            count -= HOP;
+                            System.arraycopy(samples, HOP, samples, 0, count);
+                            intervalPeak = Math.max(intervalPeak, f.rms);
+                            intervalFrames++;
+                            segmenter.feed(f);
+                        }
+                    }
+                    if (System.currentTimeMillis() >= nextLog) {
+                        Logger.i("voice: diag peak=" + round4(intervalPeak)
+                                + " n=" + intervalFrames + " "
+                                + segmenter.summary());
+                        intervalPeak = 0;
+                        intervalFrames = 0;
+                        nextLog += 1000L;
+                    }
+                }
+                Logger.i("voice: diagnose done reads=" + reads + " "
+                        + segmenter.summary());
+                main.post(() -> listener.onDone(true, "diagnose done"));
+            } catch (Throwable t) {
+                Logger.i("voice: diagnose failed " + t);
+                main.post(() -> listener.onDone(false, "diagnose failed: " + t));
+            } finally {
+                try {
+                    if (r.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING) {
+                        r.stop();
+                    }
+                } catch (Throwable ignored) {
+                }
+                try {
+                    r.release();
+                } catch (Throwable ignored) {
+                }
+                Logger.i("voice: diagnose ended");
+            }
+        }, "attc-voice-diag").start();
+    }
+
+    private static double round4(double v) {
+        return Math.round(v * 10000.0) / 10000.0;
     }
 
     // ------------------------------------------------------------ templates
@@ -622,17 +729,27 @@ public final class VoiceEngine {
 
     /** Adaptive energy VAD that emits one segment when speech pauses. */
     private static final class Segmenter {
-        private double noise = 60;
+        private double noise = NOISE_INIT;
         private boolean speech;
         private int silence;
         private final List<Frame> current = new ArrayList<>();
         private final ArrayDeque<Frame> recent = new ArrayDeque<>();
+        private long frames;
+        private int segments;
+        private double peak;
 
         List<Frame> feed(Frame f) {
             double rms = f.rms;
-            boolean voiced = rms > Math.max(90, noise * 2.8);
+            frames++;
+            if (rms > peak) {
+                peak = rms;
+            }
+            boolean voiced = rms > Math.max(VOICED_MIN, noise * 2.8);
             if (!voiced) {
-                noise = Math.min(3000, Math.max(30, noise * 0.97 + rms * 0.03));
+                // Track the floor only while nobody is talking, so a held note
+                // cannot lift the threshold above the speaker's own level.
+                noise = Math.min(NOISE_MAX,
+                        Math.max(NOISE_MIN, noise * 0.98 + rms * 0.02));
             }
             recent.addLast(f);
             while (recent.size() > 8) {
@@ -653,8 +770,10 @@ public final class VoiceEngine {
                 }
                 current.add(f);
                 silence = 0;
-                if (current.size() > MAX_FRAMES) {
-                    current.remove(0);
+                if (current.size() >= MAX_FRAMES) {
+                    // Never drop a long utterance: emit it and let the length
+                    // check / DTW matcher decide what to do with it.
+                    return emit();
                 }
                 return null;
             }
@@ -664,14 +783,16 @@ public final class VoiceEngine {
             current.add(f);
             silence++;
             if (silence >= END_SILENCE) {
-                List<Frame> out = new ArrayList<>(current);
-                reset();
-                return out;
-            }
-            if (current.size() > MAX_FRAMES + 30) {
-                reset();
+                return emit();
             }
             return null;
+        }
+
+        private List<Frame> emit() {
+            List<Frame> out = new ArrayList<>(current);
+            segments++;
+            reset();
+            return out;
         }
 
         void reset() {
@@ -680,6 +801,15 @@ public final class VoiceEngine {
             current.clear();
             recent.clear();
         }
+
+        String summary() {
+            return "frames=" + frames + " segments=" + segments
+                    + " noise=" + round4(noise) + " peak=" + round4(peak);
+        }
+
+        private static double round4(double v) {
+            return Math.round(v * 10000.0) / 10000.0;
+        }
     }
 
     private static List<Frame> trim(List<Frame> frames) {
@@ -687,11 +817,11 @@ public final class VoiceEngine {
             return frames;
         }
         double max = 0;
-        double noise = 60;
         for (Frame f : frames) {
             max = Math.max(max, f.rms);
         }
-        double floor = Math.max(noise * 2.2, max * 0.12);
+        // Relative floor only: the segmenter already decided this is speech.
+        double floor = Math.max(0.002, max * 0.15);
         int start = 0;
         int end = frames.size() - 1;
         while (start < end && frames.get(start).rms < floor) {
@@ -766,7 +896,11 @@ public final class VoiceEngine {
         float[] cur = new float[m + 1];
         java.util.Arrays.fill(prev, Float.MAX_VALUE);
         prev[0] = 0;
-        int band = Math.max(12, (int) (0.28 * Math.max(n, m)));
+        int band = Math.max(12, (int) (0.6 * Math.max(n, m)));
+        if (Math.abs(n - m) > band) {
+            // The warping band cannot bridge such different lengths.
+            return 10f;
+        }
         for (int i = 1; i <= n; i++) {
             java.util.Arrays.fill(cur, Float.MAX_VALUE);
             int lo = Math.max(1, i - band);
@@ -780,7 +914,12 @@ public final class VoiceEngine {
             prev = cur;
             cur = t;
         }
-        return prev[m] / (n + m);
+        float total = prev[m];
+        if (!Float.isFinite(total) || total > 100f) {
+            // Unreachable cells stay at Float.MAX_VALUE; report a plain miss.
+            return 10f;
+        }
+        return total / (n + m);
     }
 
     private static float dist(float[] a, float[] b) {

@@ -21,7 +21,7 @@ Debian tabanlı derleme imajında bu ikililer ve Termux başlıkları yoktur.
 
 ### 1. F-Droid resmî listesi (uzun yol)
 
-1. Depoya `v5.13` etiketi koyun ( `git tag v5.13 && git push origin v5.13` ).
+1. Depoya `v5.16` etiketi koyun ( `git tag v5.16 && git push origin v5.16` ).
 2. Derlemeyi F-Droid ortamına uyarlayın: ya proot'u kaynaktan derleyen bir
    `srclib`/`prebuild` adımı ekleyin, ya da proot ve JNI bağımlılıklarını
    NDK ile derleyen bir Gradle/CMake hattı ekleyin. Tarif taslağındaki
@@ -65,7 +65,7 @@ koymayın.
 ## Yayın öncesi kontrol listesi
 
 - [ ] `LICENSE` dosyası ve kaynak kod deposu herkese açık.
-- [ ] `v5.13` etiketi ve GitHub Release'te imzalı APK var.
+- [ ] `v5.16` etiketi ve GitHub Release'te imzalı APK var.
 - [ ] `fastlane` metinleri iki dilde dolu; ekran görüntüleri 1080×2400.
 - [ ] `docs/` GitHub Pages'te yayında; video ve poster erişilebilir.
 - [ ] Gizli anahtar, token, keystore ve kişisel veri depoda yok.

@@ -3,6 +3,18 @@
 All notable changes to Attc Code are documented here. Versions follow the
 `versionName` shipped in the APK; `versionCode` is in parentheses.
 
+## 5.16 (83) — 2026-11-14
+
+- **Wake-word fix.** The VAD thresholds were expressed in 16-bit sample units
+  while the audio pipeline works on samples normalised to [-1, 1], so no frame
+  was ever considered voiced and enrolment always ended with “not enough
+  speech”. The thresholds now use the correct scale.
+- Enrolment logs live RMS, noise floor and segment counts, and accepts long
+  utterances without dropping them.
+- DTW now skips length-mismatched pairs early, widens the Sakoe-Chiba band for
+  faster/slower speech, and reports a plain miss instead of overflow values.
+- `--ez voicediag true` records eight seconds of energy statistics.
+
 ## 5.13 (80) — 2026-11-14
 
 - **Selectable wake phrase.** Settings now offers “Hey Attc”, “Hey Attc Code”,

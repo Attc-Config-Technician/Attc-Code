@@ -43,7 +43,7 @@ Her soğuk açılışta hangi CLI'yi başlatacağınızı seçersiniz:
 | **Kimi Code** | Moonshot Kimi coding CLI |
 | **Terminal** | Düz Ubuntu shell |
 
-### “Hey Attc” sesli asistanı (5.13)
+### “Hey Attc” sesli asistanı (5.16)
 
 - **Ekran kapalıyken dinler.** Mikrofon tipli foreground service + kısmi CPU wake lock; boot sonrası otomatik başlar. Telefon tamamen kapalıyken çalışmaz.
 - **Uyanma kelimesi sizin sesinizle, çevrimdışı.** Üç örnek kayıttan MFCC/DTW modeli çıkarılır; bulut veya API anahtarı gerekmez. “attc” hazır sözlüklerde olmadığı için genel ASR yerine konuşmacıya özel eşleştirme kullanılır.
@@ -69,8 +69,8 @@ Kurulum: **Ayarlar → Voice assistant → Listen → mikrofon izni → üç kez
 3. Uygulamayı açın, CLI seçin; Ubuntu kök dosya sistemi ve seçtiğiniz CLI hazırlanır.
 4. İsteğe bağlı: Shizuku kurup Attc Code'a izin verin; pil muafiyeti ve sesli asistanı açın.
 
-Son teslim: `ATTC-CODE-5.13.apk` — `versionCode 80`, `versionName 5.13`  
-sha256: `f798e35ab8e4a183fbe510f378dd219ac5ebec877295b43b53f59f8e195b31d6`
+Son teslim: `ATTC-CODE-5.16.apk` — `versionCode 83`, `versionName 5.16`  
+sha256: `85f8ac71a5e029a8ee6165b611b38c4aba49bf21ee27b9b4b92e525148ff4a12`
 
 ### F-Droid
 
@@ -83,10 +83,10 @@ Gradle kullanılmaz. Termux'ta `aapt2`, `d8`, `apksigner`, `javac`, `android.jar
 ```bash
 git clone https://github.com/Attc-Config-Technician/Attc-Code.git
 cd Attc-Code
-VERSION_CODE=80 VERSION_NAME=5.13 bash tools/build.sh
+VERSION_CODE=83 VERSION_NAME=5.16 bash tools/build.sh
 ```
 
-Çıktı `dist/ATTC-CODE-5.13.apk`; cihaz varsa `/storage/emulated/0/ATTC OPENCODE/` altına da kopyalanır. Ortam değişkenleri: `ANDROID_JAR`, `FRAMEWORK`, `TERMUX_PREFIX`, `OUT_DIR`, `KS_FILE`, `KS_PASS`.
+Çıktı `dist/ATTC-CODE-5.16.apk`; cihaz varsa `/storage/emulated/0/ATTC OPENCODE/` altına da kopyalanır. Ortam değişkenleri: `ANDROID_JAR`, `FRAMEWORK`, `TERMUX_PREFIX`, `OUT_DIR`, `KS_FILE`, `KS_PASS`.
 
 ### Nasıl çalışır?
 
@@ -111,9 +111,9 @@ VERSION_CODE=80 VERSION_NAME=5.13 bash tools/build.sh
 
 **Attc Code** boots a real **Ubuntu 24.04 arm64** userland on Android with proot — no root — and runs AI coding CLIs inside it. A cold start asks which CLI to launch: **Attc Code (opencode + Zen)**, **Claude Code**, **Antigravity**, **Codex**, **Kimi Code**, or a plain **Terminal**.
 
-**Voice (5.13).** Say “Hey Attc” with the screen off. The wake word is a personal, fully offline MFCC/DTW model built from three recordings; the phrase itself is selectable in Settings (presets or custom text). The recognised Turkish sentence is typed into the selected CLI session, keeping the model you last picked there. With Shizuku, the bundled `attc-ctl` helper lets the agent open apps and control media through shell commands.
+**Voice (5.16).** Say “Hey Attc” with the screen off. The wake word is a personal, fully offline MFCC/DTW model built from three recordings; the phrase itself is selectable in Settings (presets or custom text). The recognised Turkish sentence is typed into the selected CLI session, keeping the model you last picked there. With Shizuku, the bundled `attc-ctl` helper lets the agent open apps and control media through shell commands.
 
-**Status.** Signed APK 5.13 (versionCode 80), sha256 `f798e35ab8e4a183fbe510f378dd219ac5ebec877295b43b53f59f8e195b31d6`. F-Droid metadata and a draft recipe are included; the official listing still needs a reproducible build on F-Droid's build server (see [fdroid/README.md](fdroid/README.md)).
+**Status.** Signed APK 5.16 (versionCode 83), sha256 `85f8ac71a5e029a8ee6165b611b38c4aba49bf21ee27b9b4b92e525148ff4a12`. F-Droid metadata and a draft recipe are included; the official listing still needs a reproducible build on F-Droid's build server (see [fdroid/README.md](fdroid/README.md)).
 
 **License.** GPL-3.0-or-later. Third-party names and trademarks belong to their owners; this project is independent.
 
