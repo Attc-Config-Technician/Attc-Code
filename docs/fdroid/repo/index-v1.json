@@ -1,6 +1,6 @@
 {
   "repo": {
-    "timestamp": 1794729340000,
+    "timestamp": 1794729651000,
     "version": 20002,
     "name": "Attc Code",
     "icon": "icon.png",
@@ -58,7 +58,7 @@
       {
         "added": 1794723107000,
         "apkName": "com.attc.opencode_84.apk",
-        "hash": "1e39c521cf149dad0049c915a3ab181ad90ec90fc52ee99577b734ce0758b6c4",
+        "hash": "4b3d1bc0d076d10ade82a620525999788f547eb8f30b224e3da32a30472248e9",
         "hashType": "sha256",
         "minSdkVersion": 26,
         "nativecode": [
