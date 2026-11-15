@@ -15,6 +15,11 @@
 #include <unistd.h>
 #include <paths.h>
 
+#ifndef _PATH_TMP
+/* Bionic's <paths.h> does not define _PATH_TMP; the NDK build needs it. */
+#define _PATH_TMP "/tmp/"
+#endif
+
 #if __ANDROID_API__ < 26
 #define __u32 uint32_t
 #include <linux/ashmem.h>
