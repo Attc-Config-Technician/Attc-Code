@@ -2,15 +2,15 @@
 # Builds a signed ATTC OPENCODE APK without Gradle.
 #
 # Local (Termux):
-#   bash tools/build.sh
+#   bash tools/build-native.sh
+#   NATIVE_OUT="$PWD/build-native" bash tools/build.sh
 #
 # Environment overrides:
 #   OUT_DIR, ANDROID_JAR, FRAMEWORK, VERSION_CODE, VERSION_NAME, NAME,
-#   KS_FILE, KS_PASS, KS_ALIAS, MIN_SDK, TARGET_SDK, JNI_INC, TERMUX_PREFIX
+#   KS_FILE, KS_PASS, KS_ALIAS, MIN_SDK, TARGET_SDK, JNI_INC, NATIVE_OUT
 #
 # F-Droid / CI:
-#   NATIVE_OUT    directory produced by tools/build-native.sh; when set, the
-#                 Termux proot/talloc/shmem/libpty binaries are not used.
+#   NATIVE_OUT    directory produced by tools/build-native.sh; required.
 #   SIGN=0        produce an unsigned APK (the F-Droid build server signs it).
 #   SKIP_ICON=1   keep the committed launcher icons instead of regenerating.
 set -euo pipefail
@@ -49,25 +49,22 @@ NATIVE_OUT="${NATIVE_OUT:-}"
 SIGN="${SIGN:-1}"
 SKIP_ICON="${SKIP_ICON:-0}"
 
-if [ -n "$NATIVE_OUT" ]; then
-  PROOT_BIN="$NATIVE_OUT/proot"
-  LOADER_BIN="$NATIVE_OUT/loader/loader"
-  PTY_SO="$NATIVE_OUT/libpty.so"
-  TALLOC_SO="$NATIVE_OUT/libtalloc.so.2"
-  SHMEM_SO="$NATIVE_OUT/libandroid-shmem.so"
-  for f in "$PROOT_BIN" "$LOADER_BIN" "$PTY_SO" "$TALLOC_SO" "$SHMEM_SO"; do
-    if [ ! -s "$f" ]; then
-      echo "missing native output: $f (run tools/build-native.sh)" >&2
-      exit 1
-    fi
-  done
-else
-  PROOT_BIN="$TERMUX_PREFIX/bin/proot"
-  LOADER_BIN="$APP/jni/loader"
-  PTY_SO="$APP/jni/libpty.so"
-  TALLOC_SO="$TERMUX_PREFIX/lib/libtalloc.so.2"
-  SHMEM_SO="$TERMUX_PREFIX/lib/libandroid-shmem.so"
+if [ -z "$NATIVE_OUT" ]; then
+  echo "NATIVE_OUT is required; run tools/build-native.sh first" >&2
+  exit 1
 fi
+
+PROOT_BIN="$NATIVE_OUT/proot"
+LOADER_BIN="$NATIVE_OUT/loader/loader"
+PTY_SO="$NATIVE_OUT/libpty.so"
+TALLOC_SO="$NATIVE_OUT/libtalloc.so.2"
+SHMEM_SO="$NATIVE_OUT/libandroid-shmem.so"
+for f in "$PROOT_BIN" "$LOADER_BIN" "$PTY_SO" "$TALLOC_SO" "$SHMEM_SO"; do
+  if [ ! -s "$f" ]; then
+    echo "missing native output: $f (run tools/build-native.sh)" >&2
+    exit 1
+  fi
+done
 
 for bin in aapt2 javac d8 zip apksigner; do
   if ! command -v "$bin" >/dev/null 2>&1; then
@@ -80,10 +77,7 @@ if [ ! -f "$ANDROID_JAR" ]; then
   exit 1
 fi
 
-echo "[0/7] native + icon + local CA"
-if [ -z "$NATIVE_OUT" ]; then
-  bash "$ROOT/tools/pty.sh"
-fi
+echo "[0/7] icon + local CA"
 if [ "$SKIP_ICON" != "1" ]; then
   python3 "$ROOT/tools/make_icon.py"
 fi

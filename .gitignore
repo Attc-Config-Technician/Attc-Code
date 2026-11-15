@@ -36,3 +36,4 @@ app/jni/libpty.so
 
 # Native build output
 build-native/
+app/jni/loader
