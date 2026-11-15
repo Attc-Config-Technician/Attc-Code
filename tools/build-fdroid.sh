@@ -32,8 +32,16 @@ if [ -z "$NDK_DIR" ] || [ ! -d "$NDK_DIR" ]; then
   exit 1
 fi
 
-ANDROID_JAR="$SDK_DIR/platforms/android-28/android.jar"
-if [ ! -f "$ANDROID_JAR" ]; then
+ANDROID_JAR=""
+# foregroundServiceType needs API 29+, and the F-Droid buildserver ships
+# platforms up to 33. Prefer a modern platform while keeping targetSdk at 28.
+for level in 33 34 35 36 32 31 30 29; do
+  if [ -f "$SDK_DIR/platforms/android-$level/android.jar" ]; then
+    ANDROID_JAR="$SDK_DIR/platforms/android-$level/android.jar"
+    break
+  fi
+done
+if [ -z "$ANDROID_JAR" ]; then
   ANDROID_JAR="$(find "$SDK_DIR/platforms" -maxdepth 2 -name android.jar 2>/dev/null \
     | sort -V | tail -1)"
 fi
