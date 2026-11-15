@@ -3,10 +3,11 @@
   for (var i = 0; i < buttons.length; i++) {
     buttons[i].addEventListener("click", function () {
       var text = this.getAttribute("data-copy") || "";
-      var label = this;
+      var label = this.getAttribute("data-label") || "Copy";
+      var button = this;
       function done(ok) {
-        label.textContent = ok ? "kopyalandı" : "kopyalanamadı";
-        setTimeout(function () { label.textContent = "kopyala"; }, 1600);
+        button.textContent = ok ? "Copied" : "Copy failed";
+        setTimeout(function () { button.textContent = label; }, 1600);
       }
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });

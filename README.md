@@ -1,123 +1,139 @@
 <p align="center">
-  <img src="docs/assets/feature-graphic.png" alt="Attc Code — Ubuntu + AI coding CLIs on Android" width="100%">
+  <img src="docs/assets/feature-graphic.png" alt="Attc Code — Ubuntu and AI coding agents on Android" width="100%">
 </p>
 
 <h1 align="center">Attc Code</h1>
 
 <p align="center">
-  <strong>Cebinizde gerçek bir Ubuntu 24.04 arm64 terminali.<br>
-  opencode, Claude Code, Codex, Kimi ve Antigravity — root gerekmez.</strong>
+  <strong>A real Ubuntu 24.04 terminal and five AI coding agents in your pocket.</strong><br>
+  No root. No PC. Android 8+ on arm64.
 </p>
 
 <p align="center">
-  <a href="https://github.com/Attc-Config-Technician/Attc-Code/releases/latest"><img src="https://img.shields.io/github/v/release/Attc-Config-Technician/Attc-Code?style=flat-square&label=APK" alt="Release"></a>
-  <img src="https://img.shields.io/badge/Android-8.0%2B%20arm64-38f5b8?style=flat-square" alt="Android 8+ arm64">
+  <a href="https://github.com/Attc-Config-Technician/Attc-Code/releases/latest"><img src="https://img.shields.io/github/v/release/Attc-Config-Technician/Attc-Code?style=flat-square&label=APK" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/Android-8.0%2B%20arm64-38f5b8?style=flat-square" alt="Android 8.0+ arm64">
   <img src="https://img.shields.io/badge/license-GPL--3.0--or--later-38f5b8?style=flat-square" alt="GPL-3.0-or-later">
-  <img src="https://img.shields.io/badge/F--Droid-haz%C4%B1rl%C4%B1k%20a%C5%9Famas%C4%B1nda-93a7b4?style=flat-square" alt="F-Droid hazırlık aşamasında">
+  <img src="https://img.shields.io/badge/root-not%20required-38f5b8?style=flat-square" alt="Root not required">
 </p>
 
 <p align="center">
-  <a href="docs/assets/attc-code-ad.mp4">▶ Tanıtım filmini izle (52 sn)</a> ·
-  <a href="https://attc-config-technician.github.io/Attc-Code/">Web sayfası</a> ·
-  <a href="https://github.com/Attc-Config-Technician/Attc-Code/releases/latest">APK indir</a>
+  <a href="https://attc-config-technician.github.io/Attc-Code/watch.html"><img src="docs/assets/demo.gif" alt="Attc Code demo" width="820"></a>
 </p>
 
 <p align="center">
-  <a href="docs/assets/attc-code-ad.mp4"><img src="docs/assets/poster.jpg" alt="Attc Code tanıtım filmi" width="720"></a>
+  <a href="https://attc-config-technician.github.io/Attc-Code/watch.html">▶ Watch the 52-second film</a> ·
+  <a href="https://attc-config-technician.github.io/Attc-Code/">Website</a> ·
+  <a href="https://github.com/Attc-Config-Technician/Attc-Code/releases/latest">Download APK</a> ·
+  <a href="https://attc-config-technician.github.io/Attc-Code/fdroid/">Install from F-Droid</a>
 </p>
 
 ---
 
-## Türkçe
+## What is Attc Code?
 
-**Attc Code**, Android telefonunuzda proot tabanlı gerçek bir **Ubuntu 24.04 arm64** ortamı açar ve içinde yapay zekâ kodlama CLI'lerini çalıştırır. Root gerekmez; uygulama normal bir Android uygulaması olarak kurulur. Shizuku isteğe bağlıdır ve yalnızca telefon kontrolü (uygulama açma, medya, dokunma) için gerekir.
+Attc Code boots a real **Ubuntu 24.04 arm64** userland on your phone with proot. Inside it, you can run the AI coding CLI you already use — or drop into a normal shell and install whatever you need with `apt`.
 
-Her soğuk açılışta hangi CLI'yi başlatacağınızı seçersiniz:
+There is no emulator layer, no remote desktop, and no root. The app is a normal Android APK; Shizuku is optional and only adds phone control.
 
-| CLI | Ne yapar? |
+<p align="center">
+  <img src="docs/assets/screenshot-chooser.png" alt="CLI chooser" width="300">
+  <img src="docs/assets/screenshot-settings.png" alt="Settings and voice assistant" width="300">
+</p>
+
+## Five agents. One terminal.
+
+Every cold start asks what you want to launch. Warm sessions keep their working directory and the model you last used.
+
+| CLI | What it gives you |
 |---|---|
-| **Attc Code** | opencode + Zen modelleri |
-| **Claude Code** | Anthropic CLI, uygulama içi Zen ağ geçidi üzerinden |
-| **Antigravity** | Google Antigravity agent CLI |
-| **Codex** | OpenAI Codex coding CLI |
-| **Kimi Code** | Moonshot Kimi coding CLI |
-| **Terminal** | Düz Ubuntu shell |
+| **Attc Code** | opencode with Zen models |
+| **Claude Code** | Anthropic's coding CLI through the in-app gateway |
+| **Codex** | OpenAI's coding CLI |
+| **Kimi Code** | Moonshot's coding CLI |
+| **Antigravity** | Google's agent CLI |
+| **Terminal** | A plain Ubuntu shell |
 
-### “Hey Attc” sesli asistanı (5.16)
+## Everything in one app
 
-- **Ekran kapalıyken dinler.** Mikrofon tipli foreground service + kısmi CPU wake lock; boot sonrası otomatik başlar. Telefon tamamen kapalıyken çalışmaz.
-- **Uyanma kelimesi sizin sesinizle, çevrimdışı.** Üç örnek kayıttan MFCC/DTW modeli çıkarılır; bulut veya API anahtarı gerekmez. “attc” hazır sözlüklerde olmadığı için genel ASR yerine konuşmacıya özel eşleştirme kullanılır.
-- **Kelime ayarlardan seçilir.** “Hey Attc”, “Hey Attc Code”, “Merhaba Attc”, “Selam Attc” veya özel metin. Kelime değişince eski kayıtlar geçersiz olur ve yeniden kayıt istenir.
-- **Türkçe komut → seçili CLI.** Google konuşma tanıma (tr-TR) cümleyi yazıya çevirir; metin seçili CLI'nin **son kullandığınız modeldeki** oturumuna yazılır. Oturum yoksa CLI başlatılır.
-- **Telefon kontrolü.** `attc-ctl` yardımcısı, Shizuku shell üzerinden `am`, `input`, `uiautomator`, `cmd media_session` gibi komutları çalıştırır. “YouTube Music'i aç ve şu şarkıyı çal” gibi istekler ajana bu araçla iletilir.
-- **İzin akışı.** Ses özelliği varsayılan kapalıdır; açınca mikrofon izni istenir, reddedilirse uygulama ayarlarına yönlendirilir.
+- **Real Ubuntu 24.04 arm64.** `apt`, Python, Node, Git and compilers run as native arm64 binaries.
+- **One-tap launch.** Pick a CLI at startup; the app prepares the root filesystem and keeps it up to date.
+- **Offline “Hey Attc” wake word.** Built from three recordings of your voice, entirely on the device. No cloud key required.
+- **Turkish voice commands.** After the wake word, your sentence is transcribed and typed into the active CLI session — with the model you last selected.
+- **Phone control with Shizuku.** The bundled `attc-ctl` bridge lets an agent open apps, control media, tap the screen and take screenshots.
+- **A terminal made for phones.** Extra key row, pinch-to-zoom, text selection, clipboard, file attachments and session switching.
+- **Battery and network aware.** Partial wake lock only while listening, optional Wi-Fi lock, battery exemption and quota reset.
 
-Kurulum: **Ayarlar → Voice assistant → Listen → mikrofon izni → üç kez uyanma kelimesini söyle → Wake phrase ile kelimeyi seç.**
+## “Hey Attc” — voice, without the cloud
 
-> Konuşma tanıma, cihazdaki Google servisine gidebilir. Uyanma kelimesi algılama tamamen çevrimdışıdır; ses kayıtları telefondan çıkmaz.
+Say **“Hey Attc”** with the screen off. The wake word is matched locally with MFCC features and dynamic time warping, using a small model trained from your own recordings. Nothing about the wake word leaves the phone.
 
-### Ekranlar
+The phrase is selectable in **Settings → Voice assistant**: presets such as “Hey Attc”, “Hey Attc Code”, “Merhaba Attc” and “Selam Attc”, or your own text. Changing the phrase asks you to record three new samples.
 
-| CLI seçimi | Ayarlar / sesli asistan |
-|---|---|
-| ![CLI seçimi](docs/assets/screenshot-chooser.png) | ![Ayarlar](docs/assets/screenshot-settings.png) |
+After the wake word, Android's speech recogniser turns Turkish speech into text and sends it to the selected CLI session. Voice is off by default and asks for microphone permission the first time you enable it.
 
-### Kurulum
+> Speech recognition may use the Google service on your device. Wake-word detection itself is fully offline.
 
-1. [Releases](https://github.com/Attc-Config-Technician/Attc-Code/releases/latest) sayfasından imzalı APK'yı indirin (Android 8.0+, arm64).
-2. Bilinmeyen kaynak iznini yalnızca bu kurulum için açıp APK'yı yükleyin.
-3. Uygulamayı açın, CLI seçin; Ubuntu kök dosya sistemi ve seçtiğiniz CLI hazırlanır.
-4. İsteğe bağlı: Shizuku kurup Attc Code'a izin verin; pil muafiyeti ve sesli asistanı açın.
+## Install
 
-Son teslim: `ATTC-CODE-5.16.apk` — `versionCode 83`, `versionName 5.16`  
-sha256: `85f8ac71a5e029a8ee6165b611b38c4aba49bf21ee27b9b4b92e525148ff4a12`
+1. **Download the APK** from [Releases](https://github.com/Attc-Config-Technician/Attc-Code/releases/latest), or add the [Attc Code F-Droid repository](https://attc-config-technician.github.io/Attc-Code/fdroid/).
+2. Open the app and choose a CLI. The Ubuntu root filesystem and your chosen CLI are prepared on first launch.
+3. Optional: install Shizuku and grant Attc Code access for phone control; enable the voice assistant and battery exemption in Settings.
 
-### F-Droid
+**F-Droid repository:** `https://attc-config-technician.github.io/Attc-Code/fdroid/repo`  
+**Repository fingerprint:** `AB:73:93:41:CA:B4:66:C0:0C:99:3C:46:ED:E7:15:6E:63:3F:1C:B7:05:FD:FD:7C:C2:26:6E:95:F2:5E:60:B5`  
+[Setup instructions](https://attc-config-technician.github.io/Attc-Code/fdroid/)
 
-Depo **GPL-3.0-or-later** ile lisanslanmıştır. F-Droid için gerekli `fastlane` metinleri, ekran görüntüleri, tanıtım videosu ve tarif taslağı `fastlane/` ile `fdroid/` altında hazır. Resmî F-Droid listelemesi, F-Droid'in kendi derleme sunucusunda üretilen APK'yı gerektirir; başvuru adımları ve derleme uyarlaması için [fdroid/README.md](fdroid/README.md).
+## How it works
 
-### Derleme
+<p align="center">
+  <img src="docs/assets/architecture.svg" alt="Attc Code architecture: Android app, proot, Ubuntu 24.04 arm64 and AI coding CLIs" width="900">
+</p>
 
-Gradle kullanılmaz. Termux'ta `aapt2`, `d8`, `apksigner`, `javac`, `android.jar` ve proot ikilileriyle tek betik yeterlidir:
+- **proot + Ubuntu 24.04 arm64.** The root filesystem lives in app-private storage; `/sdcard`, `/storage/emulated/0`, `/mnt` and `/system` are bind-mounted into the guest.
+- **PTY over JNI.** The terminal view is VT100/xterm compatible and talks to a real pseudo-terminal.
+- **Foreground service.** Sessions, notifications and wake locks are managed by an Android foreground service.
+- **VoiceEngine.** 16 kHz mono capture, 25 ms windows with 10 ms hop, FFT-512, 26 mel bands, 13 MFCCs, adaptive energy VAD and Sakoe-Chiba-banded DTW.
+- **VoiceBridge.** Watches a file queue under `/root/attc/ctl`, runs requests through the Shizuku shell and writes the result back.
 
-```bash
-git clone https://github.com/Attc-Config-Technician/Attc-Code.git
-cd Attc-Code
-VERSION_CODE=83 VERSION_NAME=5.16 bash tools/build.sh
-```
+## Limitations
 
-Çıktı `dist/ATTC-CODE-5.16.apk`; cihaz varsa `/storage/emulated/0/ATTC OPENCODE/` altına da kopyalanır. Ortam değişkenleri: `ANDROID_JAR`, `FRAMEWORK`, `TERMUX_PREFIX`, `OUT_DIR`, `KS_FILE`, `KS_PASS`.
+- **arm64 only**, Android 8.0 or newer.
+- Voice does not work when the phone is powered off or the app is force-stopped.
+- proot is not an emulator. Some kernel features (real mounts, some DRM apps) remain restricted.
+- Deep-link behaviour in apps such as YouTube Music varies by version; the bridge returns the `am start` output to the agent.
+- Speech recognition needs a device speech service. Without one, the app reports an error.
 
-### Nasıl çalışır?
+## FAQ
 
-- **proot + Ubuntu 24.04 arm64** kök dosya sistemi uygulama özel dizininde tutulur; `/sdcard`, `/storage/emulated/0`, `/mnt` ve `/system` misafir ortama bağlanır.
-- **PTY** JNI ile açılır; terminal görünümü VT100/xterm uyumludur.
-- **Foreground service** oturumu, bildirimi ve wake lock'ları yönetir.
-- **VoiceEngine** 16 kHz mono kayıt, 25 ms pencere / 10 ms hop, FFT-512, 26 mel, 13 MFCC, adaptif enerji VAD ve Sakoe-Chiba bantlı DTW kullanır.
-- **VoiceBridge** `/root/attc/ctl` altındaki dosya kuyruğunu izler; isteği Shizuku shell'de çalıştırıp sonucu geri yazar.
-- **Shizuku** yoksa yalnızca telefon kontrolü devre dışı kalır; terminal ve CLI'ler çalışmaya devam eder.
+**Do I need root?**  
+No. Attc Code runs as a normal Android app. Shizuku is optional and only needed for phone control.
 
-### Sınırlamalar
+**Do I need Termux?**  
+No. Attc Code is standalone and ships its own terminal, proot and Ubuntu root filesystem.
 
-- Yalnızca **arm64** cihazlar; Android 8.0+.
-- Telefon kapalıyken veya uygulama zorla durdurulmuşken sesli asistan çalışmaz.
-- proot bir emülatör değildir; bazı çekirdek özellikleri (ör. gerçek mount, bazı DRM uygulamaları) kısıtlıdır.
-- YouTube Music gibi uygulamalarda derin bağlantı davranışı sürüme göre değişebilir; köprü `am start` çıktısını ajana döndürür.
-- Konuşma tanıma için cihazda Google konuşma servisi gerekir; yoksa uygulama hata bildirir.
+**Which devices are supported?**  
+Android 8.0+ on arm64 phones and tablets.
 
----
+**Is Ubuntu real?**  
+Yes: a real arm64 Ubuntu 24.04 userland. It shares the Android kernel, so it is not a virtual machine.
 
-## English overview
+**Does it need internet?**  
+The first launch downloads the Ubuntu base and your chosen CLI. AI CLIs need internet for their APIs. The wake word works offline.
 
-**Attc Code** boots a real **Ubuntu 24.04 arm64** userland on Android with proot — no root — and runs AI coding CLIs inside it. A cold start asks which CLI to launch: **Attc Code (opencode + Zen)**, **Claude Code**, **Antigravity**, **Codex**, **Kimi Code**, or a plain **Terminal**.
+**What does Shizuku add?**  
+Phone control: opening apps, media control, taps and screenshots through `attc-ctl`. Without Shizuku, the terminal and CLIs still work.
 
-**Voice (5.16).** Say “Hey Attc” with the screen off. The wake word is a personal, fully offline MFCC/DTW model built from three recordings; the phrase itself is selectable in Settings (presets or custom text). The recognised Turkish sentence is typed into the selected CLI session, keeping the model you last picked there. With Shizuku, the bundled `attc-ctl` helper lets the agent open apps and control media through shell commands.
+**Where does voice data go?**  
+Wake-word samples and matching stay on the device. Speech recognition may use the device's Google speech service.
 
-**Status.** Signed APK 5.16 (versionCode 83), sha256 `85f8ac71a5e029a8ee6165b611b38c4aba49bf21ee27b9b4b92e525148ff4a12`. F-Droid metadata and a draft recipe are included; the official listing still needs a reproducible build on F-Droid's build server (see [fdroid/README.md](fdroid/README.md)).
+**How do updates work?**  
+Install the latest APK from Releases or update through the Attc Code F-Droid repository. Your Ubuntu environment and sessions are preserved.
 
-**License.** GPL-3.0-or-later. Third-party names and trademarks belong to their owners; this project is independent.
+## License
 
----
+GPL-3.0-or-later. See [LICENSE](LICENSE).
+
+Ubuntu is a trademark of Canonical Ltd. Claude, OpenAI, Moonshot, Google and other names belong to their respective owners. This project is independent.
 
 <p align="center">
   <sub>Built for people who want a real terminal in their pocket.</sub>

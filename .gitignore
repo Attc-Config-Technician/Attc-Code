@@ -33,3 +33,6 @@ Thumbs.db
 # Generated at build time (see tools/make_certs.sh and tools/pty.sh)
 app/assets/tls/
 app/jni/libpty.so
+
+# Native build output
+build-native/

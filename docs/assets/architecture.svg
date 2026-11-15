@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 470" role="img" aria-labelledby="title desc">
+  <title id="title">Attc Code architecture</title>
+  <desc id="desc">The Android app runs a foreground terminal service and voice engine, launches proot from the native library directory, and boots an Ubuntu 24.04 arm64 root filesystem that hosts the AI coding CLIs.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#38f5b8"/>
+    </marker>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0d1720"/>
+      <stop offset="1" stop-color="#091117"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="960" height="470" fill="#060a0f"/>
+  <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+    <text x="40" y="42" fill="#8aa0a0" font-size="13" letter-spacing="2.4">ATTC CODE · RUNTIME</text>
+    <text x="40" y="70" fill="#e8f1ee" font-size="22" font-weight="700">Android shell, real Linux inside.</text>
+
+    <!-- Android app -->
+    <rect x="40" y="100" width="250" height="270" rx="18" fill="url(#panel)" stroke="#1d2b36"/>
+    <rect x="40" y="100" width="250" height="4" rx="2" fill="#38f5b8"/>
+    <text x="64" y="140" fill="#38f5b8" font-size="12" letter-spacing="1.6">ANDROID APP</text>
+    <text x="64" y="170" fill="#e8f1ee" font-size="18" font-weight="650">Terminal &amp; service</text>
+    <text x="64" y="204" fill="#a9bdb9" font-size="13">VT100/xterm terminal view</text>
+    <text x="64" y="226" fill="#a9bdb9" font-size="13">Foreground session service</text>
+    <text x="64" y="248" fill="#a9bdb9" font-size="13">Offline wake-word engine</text>
+    <text x="64" y="270" fill="#a9bdb9" font-size="13">Optional Shizuku bridge</text>
+    <text x="64" y="306" fill="#6f8784" font-size="12">PTY over JNI · arm64-v8a</text>
+    <text x="64" y="330" fill="#6f8784" font-size="12">nativeLibraryDir: libproot.so</text>
+    <text x="64" y="350" fill="#6f8784" font-size="12">libproot-loader.so · libtalloc.so</text>
+
+    <!-- Arrow 1 -->
+    <line x1="296" y1="235" x2="344" y2="235" stroke="#38f5b8" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="320" y="222" fill="#38f5b8" font-size="10" text-anchor="middle" letter-spacing="1">exec</text>
+
+    <!-- proot -->
+    <rect x="350" y="100" width="250" height="270" rx="18" fill="url(#panel)" stroke="#1d2b36"/>
+    <rect x="350" y="100" width="250" height="4" rx="2" fill="#38f5b8"/>
+    <text x="374" y="140" fill="#38f5b8" font-size="12" letter-spacing="1.6">USER SPACE</text>
+    <text x="374" y="170" fill="#e8f1ee" font-size="18" font-weight="650">proot + loader</text>
+    <text x="374" y="204" fill="#a9bdb9" font-size="13">ptrace syscall translation</text>
+    <text x="374" y="226" fill="#a9bdb9" font-size="13">Bind mounts from Android</text>
+    <text x="374" y="248" fill="#a9bdb9" font-size="13">talloc + shared-memory shim</text>
+    <text x="374" y="270" fill="#a9bdb9" font-size="13">No root, no emulator</text>
+    <text x="374" y="306" fill="#6f8784" font-size="12">Freestanding static loader</text>
+    <text x="374" y="330" fill="#6f8784" font-size="12">Runs from nativeLibraryDir</text>
+    <text x="374" y="350" fill="#6f8784" font-size="12">The Android kernel stays shared</text>
+
+    <!-- Arrow 2 -->
+    <line x1="606" y1="235" x2="654" y2="235" stroke="#38f5b8" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="630" y="222" fill="#38f5b8" font-size="10" text-anchor="middle" letter-spacing="1">boot</text>
+
+    <!-- Ubuntu -->
+    <rect x="660" y="100" width="260" height="270" rx="18" fill="url(#panel)" stroke="#1d2b36"/>
+    <rect x="660" y="100" width="260" height="4" rx="2" fill="#38f5b8"/>
+    <text x="684" y="140" fill="#38f5b8" font-size="12" letter-spacing="1.6">GUEST ROOTFS</text>
+    <text x="684" y="170" fill="#e8f1ee" font-size="18" font-weight="650">Ubuntu 24.04 arm64</text>
+    <text x="684" y="204" fill="#a9bdb9" font-size="13">apt · Python · Node · Git</text>
+    <text x="684" y="226" fill="#a9bdb9" font-size="13">Real arm64 compilers</text>
+    <text x="684" y="248" fill="#a9bdb9" font-size="13">App-private root filesystem</text>
+    <text x="684" y="270" fill="#a9bdb9" font-size="13">/sdcard and /mnt bind-mounted</text>
+    <text x="684" y="306" fill="#6f8784" font-size="12">Persistent across updates</text>
+    <text x="684" y="330" fill="#6f8784" font-size="12">Prepared on first launch</text>
+    <text x="684" y="350" fill="#6f8784" font-size="12">Session keeps working directory</text>
+
+    <!-- Bottom CLI bar -->
+    <rect x="40" y="400" width="880" height="46" rx="14" fill="#0a141b" stroke="#1d2b36"/>
+    <text x="60" y="429" fill="#38f5b8" font-size="12" letter-spacing="1.4">AI CLIs</text>
+    <text x="150" y="429" fill="#dce9e5" font-size="14">opencode · Claude Code · Codex · Kimi Code · Antigravity · plain shell</text>
+    <line x1="785" y1="370" x2="785" y2="396" stroke="#38f5b8" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <!-- footnote -->
+    <text x="40" y="463" fill="#6f8784" font-size="11">Speech recognition may use the device service; wake-word matching stays on the phone.</text>
+  </g>
+</svg>

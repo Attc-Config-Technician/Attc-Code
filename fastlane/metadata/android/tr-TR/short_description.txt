@@ -1,1 +1,0 @@
-Android'de Ubuntu 24.04 ve yapay zekâ kodlama CLI'leri. Root yok, ekran kapalı sesli uyanma.

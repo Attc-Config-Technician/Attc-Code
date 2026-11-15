@@ -3,6 +3,15 @@
 All notable changes to Attc Code are documented here. Versions follow the
 `versionName` shipped in the APK; `versionCode` is in parentheses.
 
+## 5.17 (84) — 2026-11-14
+
+- **F-Droid-ready native build.** proot, talloc and the shared-memory shim are
+  now compiled from the vendored sources in `native/` by
+  `tools/build-native.sh`, using either the Android NDK or Termux clang. The
+  APK layout and runtime behaviour are unchanged.
+- The signed Attc Code F-Droid repository is the recommended update channel,
+  alongside GitHub Releases.
+
 ## 5.16 (83) — 2026-11-14
 
 - **Wake-word fix.** The VAD thresholds were expressed in 16-bit sample units

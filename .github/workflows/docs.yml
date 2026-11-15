@@ -1,0 +1,46 @@
+name: docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'CONTRIBUTING.md'
+      - 'SECURITY.md'
+      - 'docs/**'
+      - 'tools/check_links.py'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    paths:
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'CONTRIBUTING.md'
+      - 'SECURITY.md'
+      - 'docs/**'
+      - 'tools/check_links.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  links:
+    name: Local links and SVG
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check links
+        run: python3 tools/check_links.py
+      - name: Validate SVG assets
+        run: |
+          python3 - <<'EOF'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          for path in sorted(Path("docs/assets").glob("*.svg")):
+              ET.parse(path)
+              print(f"ok {path}")
+          EOF

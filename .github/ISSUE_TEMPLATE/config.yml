@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: https://github.com/Attc-Config-Technician/Attc-Code/security/advisories/new
+    about: Report vulnerabilities privately. Do not open a public issue.
+  - name: F-Droid repository setup
+    url: https://attc-config-technician.github.io/Attc-Code/fdroid/
+    about: Add the signed Attc Code repository to F-Droid.

@@ -1,3 +1,3 @@
-- Ayarlardan seçilebilir uyanma kelimesi (hazır ifadeler + özel metin)
-- Mikrofon izni akışı ve kalıcı red durumunda uygulama ayarlarına yönlendirme
-- Bildirim ve durum metinleri yapılandırılan kelimeyi kullanır
+- Selectable wake phrase in Settings (presets and custom text)
+- Microphone permission flow, including a link to app settings when access is permanently denied
+- Notification and status text use the configured wake phrase

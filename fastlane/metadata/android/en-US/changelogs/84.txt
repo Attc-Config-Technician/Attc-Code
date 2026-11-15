@@ -1,0 +1,1 @@
+Native runtime libraries (proot, talloc and the shared-memory shim) now build from the sources in this repository. No visible changes; this release prepares the F-Droid build.

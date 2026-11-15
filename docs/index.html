@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="tr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Attc Code — Android'de Ubuntu ve yapay zekâ kodlama CLI'leri</title>
-<meta name="description" content="Attc Code, Android telefonunuzda gerçek bir Ubuntu 24.04 arm64 terminali açar; opencode, Claude Code, Codex, Kimi ve Antigravity CLI'lerini çalıştırır. Root gerekmez. Ekran kapalıyken 'Hey Attc' sesli aktivasyonu.">
+<title>Attc Code — Ubuntu and AI coding agents on Android</title>
+<meta name="description" content="Attc Code boots a real Ubuntu 24.04 arm64 terminal on Android and runs opencode, Claude Code, Codex, Kimi and Antigravity. No root. Optional offline 'Hey Attc' voice wake word.">
 <meta property="og:title" content="Attc Code">
-<meta property="og:description" content="Ubuntu + AI coding CLIs, natively on Android. No root. Voice wake word.">
+<meta property="og:description" content="A real Ubuntu terminal and five AI coding agents in your pocket. No root.">
 <meta property="og:type" content="website">
 <meta property="og:image" content="assets/og.png">
 <meta name="theme-color" content="#060a0f">
@@ -20,11 +20,12 @@
     <span>Attc Code</span>
   </a>
   <nav>
-    <a href="#features">Özellikler</a>
-    <a href="#voice">Sesli asistan</a>
-    <a href="#screens">Ekranlar</a>
-    <a href="#install">Kurulum</a>
-    <a href="#fdroid">F-Droid</a>
+    <a href="#features">Features</a>
+    <a href="#architecture">Architecture</a>
+    <a href="#voice">Voice</a>
+    <a href="#screens">Screens</a>
+    <a href="#install">Install</a>
+    <a href="#faq">FAQ</a>
     <a class="gh" href="https://github.com/Attc-Config-Technician/Attc-Code">GitHub ↗</a>
   </nav>
 </header>
@@ -32,152 +33,208 @@
 <main id="top">
   <section class="hero">
     <div class="hero-copy">
-      <p class="eyebrow">Android 8+ · arm64 · GPL-3.0 · root gerekmez</p>
-      <h1>Cebinizde gerçek bir <span class="accent">Ubuntu</span>.<br>Yapay zekâ kodlama ekibiniz.</h1>
-      <p class="lead">Attc Code, telefonda proot tabanlı <strong>Ubuntu 24.04 arm64</strong> açar; opencode, Claude Code, Codex, Kimi ve Antigravity CLI'lerini tek dokunuşla başlatır. Ekran kapalıyken bile <strong>“Hey Attc”</strong> diyerek komut verirsiniz.</p>
+      <p class="eyebrow">Android 8+ · arm64 · GPL-3.0 · root not required</p>
+      <h1>A real <span class="accent">Ubuntu</span> terminal.<br>Your AI coding team.</h1>
+      <p class="lead">Attc Code boots a real <strong>Ubuntu 24.04 arm64</strong> userland on your phone and launches opencode, Claude Code, Codex, Kimi and Antigravity in one tap. Say <strong>“Hey Attc”</strong> with the screen off and keep working.</p>
       <div class="cta">
-        <a class="btn primary" href="https://github.com/Attc-Config-Technician/Attc-Code/releases/latest">APK indir <span>5.16</span></a>
-        <a class="btn ghost" href="https://github.com/Attc-Config-Technician/Attc-Code">Kaynak kodu</a>
+        <a class="btn primary" href="https://github.com/Attc-Config-Technician/Attc-Code/releases/latest">Download APK <span>5.17</span></a>
+        <a class="btn ghost" href="#fdroid">Install from F-Droid</a>
       </div>
-      <p class="fineprint">sha256 <code id="sha">85f8ac71a5e029a8ee6165b611b38c4aba49bf21ee27b9b4b92e525148ff4a12</code>
-        <button class="copy" data-copy="85f8ac71a5e029a8ee6165b611b38c4aba49bf21ee27b9b4b92e525148ff4a12" aria-label="sha256 kopyala">kopyala</button></p>
+      <p class="fineprint">Signed APK · Android 8.0+ · arm64 · no root</p>
     </div>
     <div class="hero-media">
-      <video controls preload="none" poster="assets/poster.jpg" playsinline>
+      <video controls autoplay muted loop playsinline preload="metadata" poster="assets/poster.jpg">
         <source src="assets/attc-code-ad.mp4" type="video/mp4">
-        Tarayıcınız video etiketini desteklemiyor.
+        Your browser does not support the video tag.
       </video>
-      <div class="video-caption">52 saniyelik tanıtım · 720p</div>
+      <div class="video-caption">52-second demo · 720p</div>
     </div>
   </section>
 
-  <section class="strip" aria-label="Desteklenen CLI'ler">
+  <section class="strip" aria-label="Supported CLIs">
     <span>opencode</span><i></i><span>Claude Code</span><i></i><span>Codex</span><i></i><span>Kimi Code</span><i></i><span>Antigravity</span><i></i><span>Terminal</span>
   </section>
 
   <section id="features" class="section">
     <div class="section-head">
-      <p class="eyebrow">Neden Attc Code?</p>
-      <h2>Terminal uygulaması değil; taşınabilir bir geliştirme ortamı.</h2>
+      <p class="eyebrow">Why Attc Code?</p>
+      <h2>Not a terminal app. A portable development environment.</h2>
     </div>
     <div class="grid">
       <article class="card">
         <div class="ico">▣</div>
-        <h3>Gerçek Ubuntu 24.04</h3>
-        <p>proot ile çalışan arm64 userland. apt, python, node, git ve derleyiciler gerçek binary olarak çalışır; emülatör katmanı yok.</p>
+        <h3>Real Ubuntu 24.04</h3>
+        <p>An arm64 userland running on proot. apt, Python, Node, Git and compilers are real binaries — no emulator layer.</p>
       </article>
       <article class="card">
         <div class="ico">⌘</div>
-        <h3>Tek ekranda CLI seçimi</h3>
-        <p>Her soğuk açılışta opencode, Claude Code, Antigravity, Codex, Kimi veya düz terminal. Sıcak oturum kaldığı yerden devam eder.</p>
+        <h3>One tap to your agent</h3>
+        <p>Choose opencode, Claude Code, Antigravity, Codex, Kimi or a plain terminal on every cold start. Warm sessions resume where you left off.</p>
       </article>
       <article class="card">
         <div class="ico">◉</div>
-        <h3>Ekran kapalıyken sesli komut</h3>
-        <p>“Hey Attc” uyanma kelimesi tamamen çevrimdışı MFCC/DTW ile tanınır. Komut Türkçe konuşmadan yazıya çevrilip seçili CLI'ye gider.</p>
+        <h3>Screen-off voice commands</h3>
+        <p>“Hey Attc” is matched fully offline with a personal MFCC/DTW model. Your Turkish sentence is transcribed into the active CLI.</p>
       </article>
       <article class="card">
         <div class="ico">⇄</div>
-        <h3>Telefon kontrol köprüsü</h3>
-        <p>Shizuku varsa <code>attc-ctl</code> ile uygulama açma, medya oynatma, dokunma ve ekran görüntüsü gibi shell işleri ajandan yapılabilir.</p>
+        <h3>Phone control bridge</h3>
+        <p>With Shizuku, the bundled <code>attc-ctl</code> helper lets an agent open apps, play media, tap and take screenshots.</p>
       </article>
       <article class="card">
         <div class="ico">⌁</div>
-        <h3>Termux hissi</h3>
-        <p>Ekstra tuş satırı, yakınlaştırma, metin seçimi, pano, dosya iliştirme ve oturumlar arası geçiş; hepsi tek elle kullanılacak şekilde.</p>
+        <h3>Made for thumbs</h3>
+        <p>Extra key row, pinch-to-zoom, text selection, clipboard, file attachments and session switching — all one-handed.</p>
       </article>
       <article class="card">
         <div class="ico">◎</div>
-        <h3>Pil ve ağ kontrolü</h3>
-        <p>Ekran kapalı dinleme için kısmi wake lock; isteğe bağlı Wi-Fi kilidi, pil muafiyeti ve otomatik kota sıfırlama.</p>
+        <h3>Battery and network aware</h3>
+        <p>Partial wake lock only while listening, optional Wi-Fi lock, battery exemption and automatic quota reset.</p>
+      </article>
+    </div>
+  </section>
+
+  <section id="architecture" class="section architecture">
+    <div class="section-head">
+      <p class="eyebrow">Architecture</p>
+      <h2>Android shell, real Linux inside.</h2>
+    </div>
+    <figure class="arch-figure">
+      <img src="assets/architecture.svg" alt="Attc Code architecture: Android terminal service, proot and loader, Ubuntu 24.04 arm64 root filesystem, and the AI coding CLIs">
+    </figure>
+    <div class="grid">
+      <article class="card">
+        <div class="ico">◧</div>
+        <h3>No root, no emulator</h3>
+        <p>proot translates syscalls with ptrace and runs from <code>nativeLibraryDir</code>, so Android's W^X rule is respected. The guest shares the Android kernel.</p>
+      </article>
+      <article class="card">
+        <div class="ico">▤</div>
+        <h3>Real root filesystem</h3>
+        <p>Ubuntu 24.04 arm64 lives in app-private storage. <code>apt</code>, Python, Node, Git and compilers are real arm64 binaries, and <code>/sdcard</code> is bind-mounted in.</p>
+      </article>
+      <article class="card">
+        <div class="ico">◈</div>
+        <h3>One session, many agents</h3>
+        <p>A foreground service owns the PTY and the session. Pick opencode, Claude Code, Codex, Kimi or Antigravity at cold start; the working directory and model are kept warm.</p>
       </article>
     </div>
   </section>
 
   <section id="voice" class="section voice">
     <div class="voice-copy">
-      <p class="eyebrow">Siri benzeri, ama sizin sesinizle</p>
-      <h2>“Hey Attc” → dinle → yaz → seçili CLI'de çalıştır.</h2>
-      <p>Uyanma kelimesi bulut anahtarı istemez. Telefonda üç kez kaydettiğiniz örneklerden kişisel bir MFCC/DTW modeli çıkarılır; kelimeyi ve dil modelini siz seçersiniz. Uyandıktan sonra Google konuşma tanıma (tr-TR) cümleyi yazıya çevirir ve en son kullandığınız CLI/model oturumuna iletir.</p>
+      <p class="eyebrow">Siri-like, but in your own voice</p>
+      <h2>“Hey Attc” → listen → transcribe → run in the selected CLI.</h2>
+      <p>The wake word needs no cloud key. A personal MFCC/DTW model is built from three recordings on the phone; you choose the phrase and language model. After the wake word, Google speech recognition (tr-TR) turns your sentence into text and sends it to the CLI and model you last used.</p>
       <ul class="checks">
-        <li>Uyanma kelimesi ayarlardan seçilir: hazır ifadeler veya özel metin.</li>
-        <li>Ekran kapalı ve kilitliyken çalışır; boot sonrası otomatik başlar.</li>
-        <li>Mikrofon izni ilk açılışta istenir; ses özelliği varsayılan kapalıdır.</li>
-        <li>“YouTube Music'i aç ve şu şarkıyı çal” gibi görevler <code>attc-ctl</code> köprüsüne talimat olarak eklenir.</li>
+        <li>Choose the phrase in Settings: presets or custom text.</li>
+        <li>Works with the screen off and locked; starts automatically after boot.</li>
+        <li>Microphone permission is requested the first time; voice is off by default.</li>
+        <li>Requests such as “Open YouTube Music and play this song” go to the <code>attc-ctl</code> bridge.</li>
       </ul>
     </div>
     <div class="voice-shot">
-      <img src="assets/screenshot-settings.png" alt="Attc Code ayarlar ekranı: sesli asistan, uyanma kelimesi ve CLI seçimi">
+      <img src="assets/screenshot-settings.png" alt="Attc Code settings: voice assistant, wake phrase and CLI selection">
     </div>
   </section>
 
   <section id="screens" class="section">
     <div class="section-head">
-      <p class="eyebrow">Ekranlar</p>
-      <h2>Karanlık tema, tek elle kullanım.</h2>
+      <p class="eyebrow">Screens</p>
+      <h2>Dark, focused, one-handed.</h2>
     </div>
     <div class="shots">
       <figure>
-        <img src="assets/screenshot-chooser.png" alt="CLI seçim ekranı">
-        <figcaption>Her açılışta CLI seçimi</figcaption>
+        <img src="assets/screenshot-chooser.png" alt="CLI chooser">
+        <figcaption>Pick a CLI on every cold start</figcaption>
       </figure>
       <figure>
-        <img src="assets/screenshot-settings.png" alt="Ayarlar ve sesli asistan">
-        <figcaption>Sesli asistan, uyanma kelimesi ve güvenlik ayarları</figcaption>
+        <img src="assets/screenshot-settings.png" alt="Settings and voice assistant">
+        <figcaption>Voice assistant, wake phrase and safety settings</figcaption>
       </figure>
     </div>
   </section>
 
   <section id="install" class="section install">
     <div class="section-head">
-      <p class="eyebrow">Kurulum</p>
-      <h2>Üç adımda çalışır.</h2>
+      <p class="eyebrow">Install</p>
+      <h2>Running in three steps.</h2>
     </div>
     <ol class="steps">
       <li>
         <span>01</span>
-        <h3>APK'yı indirin</h3>
-        <p>GitHub Releases sayfasından imzalı APK'yı indirin. Android 8.0+ ve arm64 gerekir. Bilinmeyen kaynak iznini yalnızca bu kurulum için açın.</p>
+        <h3>Get the APK</h3>
+        <p>Download the signed APK from GitHub Releases, or add the Attc Code F-Droid repository below. Android 8.0+ and arm64 are required.</p>
       </li>
       <li>
         <span>02</span>
-        <h3>Açın ve CLI seçin</h3>
-        <p>İlk açılışta Ubuntu kök dosya sistemi hazırlanır. Bağlantı varsa seçtiğiniz CLI otomatik kurulur; sonraki açılışlarda seçim ekranı yine gelir.</p>
+        <h3>Open and choose a CLI</h3>
+        <p>The first launch prepares the Ubuntu root filesystem. With a connection, your chosen CLI is installed automatically.</p>
       </li>
       <li>
         <span>03</span>
-        <h3>Sesi açın (isteğe bağlı)</h3>
-        <p>Ayarlar → Voice assistant → mikrofon izni → üç kez “Hey Attc” kaydı. Ardından uyanma kelimesini değiştirebilir, pil muafiyeti verebilirsiniz.</p>
+        <h3>Enable voice (optional)</h3>
+        <p>Settings → Voice assistant → microphone permission → record “Hey Attc” three times. Then pick your wake phrase and battery exemption.</p>
       </li>
     </ol>
     <div class="note">
-      <strong>Shizuku isteğe bağlıdır.</strong> Terminal ve CLI'ler Shizuku olmadan da çalışır. Telefon kontrolü (uygulama açma, medya, dokunma) için Shizuku kurup Attc Code'a izin verin.
+      <strong>Shizuku is optional.</strong> The terminal and CLIs work without it. Install Shizuku and grant Attc Code access only if you want app, media and tap control.
     </div>
   </section>
 
   <section id="fdroid" class="section fdroid">
     <div>
       <p class="eyebrow">F-Droid</p>
-      <h2>Açık kaynak, tekrarlanabilir derleme hedefi.</h2>
-      <p>Depo GPL-3.0 ile lisanslanır. F-Droid mağazası için <code>fastlane</code> metinleri, ekran görüntüleri, video ve <code>fdroid/com.attc.opencode.yml</code> tarifi depoda hazır. Resmî listelemeye kabul için F-Droid'in kendi derleme sunucusunda üretilen APK gerekir; süreç <a href="https://github.com/Attc-Config-Technician/Attc-Code/blob/main/fdroid/README.md">fdroid/README.md</a> içinde adım adım anlatılır.</p>
+      <h2>Install and update from F-Droid.</h2>
+      <p>Add the Attc Code repository to the F-Droid client once. Updates arrive through F-Droid, and the APK signing key stays the same.</p>
       <div class="badges">
-        <span class="badge muted">F-Droid: hazırlık aşamasında</span>
-        <span class="badge">GPL-3.0-or-later</span>
+        <span class="badge">Signed repository</span>
         <span class="badge">arm64</span>
+        <span class="badge muted">F-Droid 2.x</span>
       </div>
+      <p style="margin-top:22px"><a class="btn primary" href="fdroid/">Repository setup →</a></p>
     </div>
   </section>
 
-  <section class="section build">
+  <section id="faq" class="section faq">
     <div class="section-head">
-      <p class="eyebrow">Geliştirici</p>
-      <h2>Gradle yok; tek betikle derleme.</h2>
+      <p class="eyebrow">FAQ</p>
+      <h2>Good to know.</h2>
     </div>
-    <pre><code>git clone https://github.com/Attc-Config-Technician/Attc-Code.git
-cd Attc-Code
-# Termux: aapt2, d8, apksigner, javac ve android.jar gerekir
-VERSION_CODE=83 VERSION_NAME=5.16 bash tools/build.sh</code></pre>
-    <p class="fineprint">Ayrıntılar ve ortam değişkenleri için <a href="https://github.com/Attc-Config-Technician/Attc-Code#build">README</a>. Derleme çıktısı <code>dist/</code>, cihaza teslim kopyası <code>/storage/emulated/0/ATTC OPENCODE/</code>.</p>
+    <div class="faq-list">
+      <details>
+        <summary>Do I need root?</summary>
+        <p>No. Attc Code runs as a normal Android app. Shizuku is optional and only needed for phone control.</p>
+      </details>
+      <details>
+        <summary>Do I need Termux?</summary>
+        <p>No. Attc Code is standalone and ships its own terminal, proot and Ubuntu root filesystem.</p>
+      </details>
+      <details>
+        <summary>Which devices are supported?</summary>
+        <p>Android 8.0+ on arm64 phones and tablets.</p>
+      </details>
+      <details>
+        <summary>Is Ubuntu real?</summary>
+        <p>Yes: a real arm64 Ubuntu 24.04 userland. It shares the Android kernel, so it is not a virtual machine.</p>
+      </details>
+      <details>
+        <summary>Does it need internet?</summary>
+        <p>The first launch downloads the Ubuntu base and your chosen CLI. AI CLIs need internet for their APIs. The wake word works offline.</p>
+      </details>
+      <details>
+        <summary>What does Shizuku add?</summary>
+        <p>App launching, media control, taps and screenshots through <code>attc-ctl</code>. Without it, the terminal and CLIs still work.</p>
+      </details>
+      <details>
+        <summary>Where does voice data go?</summary>
+        <p>Wake-word samples and matching stay on the device. Speech recognition may use the device's Google speech service.</p>
+      </details>
+      <details>
+        <summary>How do updates work?</summary>
+        <p>Install the latest APK or update through the Attc Code F-Droid repository. Your Ubuntu environment and sessions are preserved.</p>
+      </details>
+    </div>
   </section>
 </main>
 
@@ -186,14 +243,14 @@ VERSION_CODE=83 VERSION_NAME=5.16 bash tools/build.sh</code></pre>
     <img src="assets/logo.svg" alt="" width="28" height="28">
     <span>Attc Code</span>
   </div>
-  <p>Android'de Ubuntu ve yapay zekâ kodlama CLI'leri. Root gerekmez.</p>
+  <p>A real Ubuntu terminal and AI coding agents on Android. No root.</p>
   <div class="foot-links">
     <a href="https://github.com/Attc-Config-Technician/Attc-Code">GitHub</a>
     <a href="https://github.com/Attc-Config-Technician/Attc-Code/releases">Releases</a>
+    <a href="fdroid/">F-Droid</a>
     <a href="https://github.com/Attc-Config-Technician/Attc-Code/blob/main/LICENSE">GPL-3.0</a>
-    <a href="https://github.com/Attc-Config-Technician/Attc-Code/blob/main/fdroid/README.md">F-Droid</a>
   </div>
-  <p class="small">Ubuntu, Canonical Ltd.'nin tescilli markasıdır. Claude, OpenAI, Moonshot ve Google markaları ilgili sahiplerine aittir. Bu proje bağımsızdır.</p>
+  <p class="small">Ubuntu is a trademark of Canonical Ltd. Claude, OpenAI, Moonshot and Google names belong to their respective owners. This project is independent.</p>
 </footer>
 <script src="app.js"></script>
 </body>

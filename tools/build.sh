@@ -7,13 +7,19 @@
 # Environment overrides:
 #   OUT_DIR, ANDROID_JAR, FRAMEWORK, VERSION_CODE, VERSION_NAME, NAME,
 #   KS_FILE, KS_PASS, KS_ALIAS, MIN_SDK, TARGET_SDK, JNI_INC, TERMUX_PREFIX
+#
+# F-Droid / CI:
+#   NATIVE_OUT    directory produced by tools/build-native.sh; when set, the
+#                 Termux proot/talloc/shmem/libpty binaries are not used.
+#   SIGN=0        produce an unsigned APK (the F-Droid build server signs it).
+#   SKIP_ICON=1   keep the committed launcher icons instead of regenerating.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$ROOT/app"
 BUILD="$ROOT/build"
 OUT_DIR="${OUT_DIR:-$ROOT/dist}"
-DELIVER_DIR="${DELIVER_DIR:-/storage/emulated/0/ATTC OPENCODE}"
+DELIVER_DIR="${DELIVER_DIR-/storage/emulated/0/ATTC OPENCODE}"
 
 ANDROID_JAR="${ANDROID_JAR:-/data/data/com.termux/files/usr/share/java/android.jar}"
 SHIZUKU_LIBS="$ROOT/libs/shizuku"
@@ -39,6 +45,30 @@ KS_ALIAS="${KS_ALIAS:-attc}"
 MIN_SDK="${MIN_SDK:-26}"
 TARGET_SDK="${TARGET_SDK:-28}"
 
+NATIVE_OUT="${NATIVE_OUT:-}"
+SIGN="${SIGN:-1}"
+SKIP_ICON="${SKIP_ICON:-0}"
+
+if [ -n "$NATIVE_OUT" ]; then
+  PROOT_BIN="$NATIVE_OUT/proot"
+  LOADER_BIN="$NATIVE_OUT/loader/loader"
+  PTY_SO="$NATIVE_OUT/libpty.so"
+  TALLOC_SO="$NATIVE_OUT/libtalloc.so.2"
+  SHMEM_SO="$NATIVE_OUT/libandroid-shmem.so"
+  for f in "$PROOT_BIN" "$LOADER_BIN" "$PTY_SO" "$TALLOC_SO" "$SHMEM_SO"; do
+    if [ ! -s "$f" ]; then
+      echo "missing native output: $f (run tools/build-native.sh)" >&2
+      exit 1
+    fi
+  done
+else
+  PROOT_BIN="$TERMUX_PREFIX/bin/proot"
+  LOADER_BIN="$APP/jni/loader"
+  PTY_SO="$APP/jni/libpty.so"
+  TALLOC_SO="$TERMUX_PREFIX/lib/libtalloc.so.2"
+  SHMEM_SO="$TERMUX_PREFIX/lib/libandroid-shmem.so"
+fi
+
 for bin in aapt2 javac d8 zip apksigner; do
   if ! command -v "$bin" >/dev/null 2>&1; then
     echo "missing tool: $bin" >&2
@@ -51,8 +81,12 @@ if [ ! -f "$ANDROID_JAR" ]; then
 fi
 
 echo "[0/7] native + icon + local CA"
-bash "$ROOT/tools/pty.sh"
-python3 "$ROOT/tools/make_icon.py"
+if [ -z "$NATIVE_OUT" ]; then
+  bash "$ROOT/tools/pty.sh"
+fi
+if [ "$SKIP_ICON" != "1" ]; then
+  python3 "$ROOT/tools/make_icon.py"
+fi
 if [ ! -f "$APP/assets/tls/attc-ipecho.p12" ]; then
   bash "$ROOT/tools/make_certs.sh"
 fi
@@ -99,28 +133,33 @@ d8 --lib "$ANDROID_JAR" --min-api "$MIN_SDK" --output "$BUILD/dex" @"$BUILD/clas
 
 echo "[5/7] package"
 cp "$BUILD/base.apk" "$BUILD/unsigned.apk"
-cp "$APP/jni/libpty.so" "$BUILD/stage/lib/arm64-v8a/libpty.so"
-cp "$APP/jni/loader" "$BUILD/stage/lib/arm64-v8a/libproot-loader.so"
+cp "$PTY_SO" "$BUILD/stage/lib/arm64-v8a/libpty.so"
+cp "$LOADER_BIN" "$BUILD/stage/lib/arm64-v8a/libproot-loader.so"
 cp "$BUILD/dex/classes.dex" "$BUILD/stage/classes.dex"
 # proot must live in nativeLibraryDir: app data is not executable (W^X).
 python3 "$ROOT/tools/patch_proot.py" \
-  "$TERMUX_PREFIX/bin/proot" "$BUILD/stage/lib/arm64-v8a/libproot.so"
-cp -L "$TERMUX_PREFIX/lib/libtalloc.so.2" "$BUILD/stage/lib/arm64-v8a/libtalloc.so"
-cp -L "$TERMUX_PREFIX/lib/libandroid-shmem.so" "$BUILD/stage/lib/arm64-v8a/libandroid-shmem.so"
+  "$PROOT_BIN" "$BUILD/stage/lib/arm64-v8a/libproot.so"
+cp -L "$TALLOC_SO" "$BUILD/stage/lib/arm64-v8a/libtalloc.so"
+cp -L "$SHMEM_SO" "$BUILD/stage/lib/arm64-v8a/libandroid-shmem.so"
 (cd "$BUILD/stage" && zip -q "$BUILD/unsigned.apk" classes.dex lib/arm64-v8a/*.so)
 
 echo "[6/7] sign"
-if [ ! -f "$KS_FILE" ]; then
-  keytool -genkeypair -keystore "$KS_FILE" -storepass "$KS_PASS" -keypass "$KS_PASS" \
-    -alias "$KS_ALIAS" -keyalg RSA -keysize 2048 -validity 10000 \
-    -dname "CN=ATTC, O=ATTC" >/dev/null 2>&1
+if [ "$SIGN" = "1" ]; then
+  if [ ! -f "$KS_FILE" ]; then
+    keytool -genkeypair -keystore "$KS_FILE" -storepass "$KS_PASS" -keypass "$KS_PASS" \
+      -alias "$KS_ALIAS" -keyalg RSA -keysize 2048 -validity 10000 \
+      -dname "CN=ATTC, O=ATTC" >/dev/null 2>&1
+  fi
+  apksigner sign --ks "$KS_FILE" --ks-pass "pass:$KS_PASS" --key-pass "pass:$KS_PASS" \
+    --out "$OUT_DIR/$NAME.apk" "$BUILD/unsigned.apk"
+  apksigner verify "$OUT_DIR/$NAME.apk"
+else
+  cp "$BUILD/unsigned.apk" "$OUT_DIR/$NAME.apk"
+  echo "unsigned build (SIGN=0)"
 fi
-apksigner sign --ks "$KS_FILE" --ks-pass "pass:$KS_PASS" --key-pass "pass:$KS_PASS" \
-  --out "$OUT_DIR/$NAME.apk" "$BUILD/unsigned.apk"
-apksigner verify "$OUT_DIR/$NAME.apk"
 
 echo "[7/7] deliver"
-if [ -d "$DELIVER_DIR" ] || mkdir -p "$DELIVER_DIR" 2>/dev/null; then
+if [ -n "$DELIVER_DIR" ] && { [ -d "$DELIVER_DIR" ] || mkdir -p "$DELIVER_DIR" 2>/dev/null; }; then
   cp "$OUT_DIR/$NAME.apk" "$DELIVER_DIR/$NAME.apk"
   (cd "$DELIVER_DIR" && sha256sum "$NAME.apk" > SHA256SUMS)
   echo "delivered -> $DELIVER_DIR/$NAME.apk"
