@@ -70,8 +70,7 @@ else
     echo "set NDK=/path/to/android-ndk to build on a normal Linux host" >&2
     exit 1
   fi
-  # Termux clang resolves ld.lld and helper tools from its own prefix, and
-  # loader-info.awk needs the Termux gawk (mawk is not compatible).
+  # Termux clang resolves ld.lld and helper tools from its own prefix.
   export PATH="$PREFIX/bin:$PATH"
   CC="$PREFIX/bin/clang"
   AR="$PREFIX/bin/llvm-ar"
@@ -145,6 +144,28 @@ rm -rf "$BUILD/proot"
 cp -a "$PROOT_SRC" "$BUILD/proot"
 sed -i '1i #include <string.h>' \
   "$BUILD/proot/src/extension/ashmem_memfd/ashmem_memfd.c" 2>/dev/null || true
+
+# proot's loader-info.awk uses GNU awk extensions (\y, strtonum). Debian and
+# the F-Droid build server default to mawk, where that script fails, so build
+# with a portable version that produces the same loader-info.c.
+cat > "$BUILD/proot/src/loader/loader-info.awk" <<'AWK'
+function hex2dec(s,   i, n, c, d) {
+    sub(/^0x/, "", s)
+    n = 0
+    for (i = 1; i <= length(s); i++) {
+        c = tolower(substr(s, i, 1))
+        d = index("0123456789abcdef", c) - 1
+        n = n * 16 + d
+    }
+    return n
+}
+$8 == "_start" { start = hex2dec($2) }
+$8 == "pokedata_workaround" { pokedata = hex2dec($2) }
+END {
+    print "#include <unistd.h>"
+    printf "const ssize_t offset_to_pokedata_workaround=%d;\n", (pokedata - start)
+}
+AWK
 
 # Android 15 requires 64-byte TLS alignment on arm64. An aligned TLS variable
 # forces the linker to emit a TLS segment with the right alignment.
