@@ -14,7 +14,7 @@
       }
     },
     "address": "https://attc-config-technician.github.io/Attc-Code/fdroid/repo",
-    "timestamp": 1794723816000,
+    "timestamp": 1794729340000,
     "categories": {
       "Development": {
         "name": {
@@ -81,11 +81,11 @@
         "preferredSigner": "791435ce1087c7841019c82429d1f333dc9c95bb2aa0f24e55594b1d43f72a85"
       },
       "versions": {
-        "018bd583ba4a48762d0287ec8d1c0f4a528b063934ac5e3f8127c86169af614d": {
+        "1e39c521cf149dad0049c915a3ab181ad90ec90fc52ee99577b734ce0758b6c4": {
           "added": 1794723107000,
           "file": {
             "name": "/com.attc.opencode_84.apk",
-            "sha256": "018bd583ba4a48762d0287ec8d1c0f4a528b063934ac5e3f8127c86169af614d",
+            "sha256": "1e39c521cf149dad0049c915a3ab181ad90ec90fc52ee99577b734ce0758b6c4",
             "size": 444626
           },
           "manifest": {

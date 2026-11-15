@@ -180,11 +180,12 @@ cp "$BUILD/proot/src/loader/loader" "$OUT/loader/loader"
 "$STRIP" "$OUT/proot" "$OUT/loader/loader"
 
 # --- libpty -----------------------------------------------------------------
+# Bionic provides forkpty() in libc; the NDK has no libutil to link against.
 echo "[4/5] libpty"
 "$CC" -shared -fPIC -O2 -fvisibility=hidden \
   -Wl,-soname,libpty.so \
   -I"$JNI_INC" \
-  -o "$OUT/libpty.so" "$JNI_DIR/pty.c" -lutil
+  -o "$OUT/libpty.so" "$JNI_DIR/pty.c"
 
 # --- verify -----------------------------------------------------------------
 echo "[5/5] verify"
