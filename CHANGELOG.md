@@ -3,6 +3,15 @@
 All notable changes to Attc Code are documented here. Versions follow the
 `versionName` shipped in the APK; `versionCode` is in parentheses.
 
+## 5.18 (85) — 2026-11-15
+
+- **Explicit download consent.** Before the first Ubuntu root filesystem or CLI
+  download, the app now explains that these files come from the network, are
+  not part of the APK and are not verified by F-Droid. Nothing is downloaded
+  until the user confirms.
+- Required by the F-Droid inclusion policy for apps that fetch executable
+  components at runtime.
+
 ## 5.17 (84) — 2026-11-14
 
 - **F-Droid-ready native build.** proot, talloc and the shared-memory shim are

@@ -78,6 +78,7 @@ public final class MainActivity extends Activity implements Hub.Listener {
     private static final String PREFS = "settings";
     private static final String KEY_BOOT = "boot";
     private static final String KEY_STORAGE_ASKED = "storage_asked";
+    private static final String KEY_DOWNLOAD_CONSENT = "download_consent";
 
     private TerminalView terminal;
     private TextView statusText;
@@ -600,6 +601,18 @@ public final class MainActivity extends Activity implements Hub.Listener {
     // ------------------------------------------------------------- lifecycle
 
     private void startTerminal() {
+        boolean consented = prefs.getBoolean(KEY_DOWNLOAD_CONSENT, false);
+        if (!consented && new Setup(this).isRootfsReady()) {
+            // Existing installations already downloaded the runtime; do not
+            // ask again after an update.
+            prefs.edit().putBoolean(KEY_DOWNLOAD_CONSENT, true).apply();
+            consented = true;
+        }
+        if (!consented) {
+            // Wait for the user to pick a CLI; startCli() asks for consent
+            // before anything is downloaded.
+            return;
+        }
         Intent i = new Intent(this, TerminalService.class)
                 .setAction(TerminalService.ACTION_START);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -1938,6 +1951,15 @@ public final class MainActivity extends Activity implements Hub.Listener {
     }
 
     private void startCli(String cli, boolean showKeyboard) {
+        boolean consented = prefs.getBoolean(KEY_DOWNLOAD_CONSENT, false);
+        if (!consented && new Setup(this).isRootfsReady()) {
+            prefs.edit().putBoolean(KEY_DOWNLOAD_CONSENT, true).apply();
+            consented = true;
+        }
+        if (!consented) {
+            askDownloadConsent(cli, showKeyboard);
+            return;
+        }
         if (chooser != null) {
             chooser.setVisibility(View.GONE);
         }
@@ -1956,6 +1978,27 @@ public final class MainActivity extends Activity implements Hub.Listener {
         if (showKeyboard) {
             terminal.focusAndShowKeyboard();
         }
+    }
+
+    /**
+     * F-Droid policy requires explicit consent before downloading executable
+     * files that are not part of the APK. The root filesystem and the AI CLIs
+     * are fetched from GitHub on first use, so ask once and explain it.
+     */
+    private void askDownloadConsent(final String cli, final boolean showKeyboard) {
+        new AlertDialog.Builder(this)
+                .setTitle("İndirme onayı")
+                .setMessage("Attc Code, Ubuntu 24.04 arm64 kök dosya sistemini ve "
+                        + "seçtiğiniz CLI'yı GitHub üzerinden indirir (yaklaşık "
+                        + "30–120 MB).\n\nBu dosyalar uygulamayla birlikte gelmez ve "
+                        + "F-Droid tarafından doğrulanmaz. Devam ederseniz indirme bu "
+                        + "cihazda başlar.")
+                .setPositiveButton("Onayla ve başlat", (d, w) -> {
+                    prefs.edit().putBoolean(KEY_DOWNLOAD_CONSENT, true).apply();
+                    startCli(cli, showKeyboard);
+                })
+                .setNegativeButton("Vazgeç", null)
+                .show();
     }
 
     // -------------------------------------------------- sessions and files

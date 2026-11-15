@@ -1,0 +1,1 @@
+Attc Code now asks for explicit consent before downloading the Ubuntu root filesystem or an AI coding CLI from the network. Nothing is downloaded until you confirm.

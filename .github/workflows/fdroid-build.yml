@@ -4,8 +4,9 @@ on:
   workflow_dispatch:
   push:
     paths:
+      - 'app/**'
       - 'native/**'
-      - 'app/jni/**'
+      - 'CHANGELOG.md'
       - 'tools/build-native.sh'
       - 'tools/build-fdroid.sh'
       - 'tools/build.sh'
@@ -46,18 +47,33 @@ jobs:
           unzip -q /tmp/ndk.zip -d "$HOME"
           echo "ANDROID_NDK_HOME=$HOME/android-ndk-r28c" >> "$GITHUB_ENV"
 
+      - name: Resolve version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="$(grep -m1 '^## ' CHANGELOG.md | sed -E 's/^## ([^ ]+).*/\1/')"
+          fi
+          line="$(grep -m1 "^## ${version} (" CHANGELOG.md)"
+          code="${line#* (}"
+          code="${code%%)*}"
+          test -n "$version" && test -n "$code"
+          echo "VERSION_NAME=$version" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$code" >> "$GITHUB_ENV"
+
       - name: Build unsigned APK
         run: |
-          bash tools/build-fdroid.sh 5.17 84 "$ANDROID_HOME" "$ANDROID_NDK_HOME"
+          bash tools/build-fdroid.sh "$VERSION_NAME" "$VERSION_CODE" "$ANDROID_HOME" "$ANDROID_NDK_HOME"
 
       - name: Verify APK contents
         run: |
-          test -f dist/ATTC-CODE-5.17.apk
-          unzip -l dist/ATTC-CODE-5.17.apk | grep -E 'classes\.dex|lib/arm64-v8a/(libproot|libproot-loader|libtalloc|libandroid-shmem|libpty)\.so'
-          sha256sum dist/ATTC-CODE-5.17.apk
+          apk="dist/ATTC-CODE-$VERSION_NAME.apk"
+          test -f "$apk"
+          unzip -l "$apk" | grep -E 'classes\.dex|lib/arm64-v8a/(libproot|libproot-loader|libtalloc|libandroid-shmem|libpty)\.so'
+          sha256sum "$apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: attc-code-5.17-unsigned
-          path: dist/ATTC-CODE-5.17.apk
+          name: attc-code-${{ env.VERSION_NAME }}-unsigned
+          path: dist/ATTC-CODE-${{ env.VERSION_NAME }}.apk
           if-no-files-found: error

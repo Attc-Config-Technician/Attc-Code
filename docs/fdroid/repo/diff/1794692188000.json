@@ -6,14 +6,90 @@
         "size": 2611
       }
     },
-    "timestamp": 1794729651000
+    "timestamp": 1794731568000
   },
   "packages": {
     "com.attc.opencode": {
       "metadata": {
-        "lastUpdated": 1794723107000
+        "lastUpdated": 1794731567000
       },
       "versions": {
+        "b59023f625bf7135ee04ffe19fadbbecbc3caf4ca61b102a4f629bafb37681b0": {
+          "added": 1794731567000,
+          "file": {
+            "name": "/com.attc.opencode_85.apk",
+            "sha256": "b59023f625bf7135ee04ffe19fadbbecbc3caf4ca61b102a4f629bafb37681b0",
+            "size": 444626
+          },
+          "manifest": {
+            "nativecode": [
+              "arm64-v8a"
+            ],
+            "versionName": "5.18",
+            "versionCode": 85,
+            "usesSdk": {
+              "minSdkVersion": 26,
+              "targetSdkVersion": 28
+            },
+            "signer": {
+              "sha256": [
+                "791435ce1087c7841019c82429d1f333dc9c95bb2aa0f24e55594b1d43f72a85"
+              ]
+            },
+            "usesPermission": [
+              {
+                "name": "android.permission.INTERNET"
+              },
+              {
+                "name": "android.permission.ACCESS_NETWORK_STATE"
+              },
+              {
+                "name": "android.permission.CHANGE_NETWORK_STATE"
+              },
+              {
+                "name": "android.permission.WAKE_LOCK"
+              },
+              {
+                "name": "android.permission.FOREGROUND_SERVICE"
+              },
+              {
+                "name": "android.permission.FOREGROUND_SERVICE_MICROPHONE"
+              },
+              {
+                "name": "android.permission.RECORD_AUDIO"
+              },
+              {
+                "name": "android.permission.MODIFY_AUDIO_SETTINGS"
+              },
+              {
+                "name": "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+              },
+              {
+                "name": "android.permission.POST_NOTIFICATIONS"
+              },
+              {
+                "name": "android.permission.RECEIVE_BOOT_COMPLETED"
+              },
+              {
+                "name": "android.permission.MANAGE_EXTERNAL_STORAGE"
+              },
+              {
+                "name": "moe.shizuku.manager.permission.API_V23"
+              },
+              {
+                "name": "android.permission.WRITE_EXTERNAL_STORAGE",
+                "maxSdkVersion": 29
+              },
+              {
+                "name": "android.permission.READ_EXTERNAL_STORAGE",
+                "maxSdkVersion": 29
+              }
+            ]
+          },
+          "antiFeatures": {
+            "NonFreeNet": {}
+          }
+        },
         "4b3d1bc0d076d10ade82a620525999788f547eb8f30b224e3da32a30472248e9": {
           "added": 1794723107000,
           "file": {

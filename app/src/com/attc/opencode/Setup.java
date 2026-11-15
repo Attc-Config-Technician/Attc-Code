@@ -234,6 +234,11 @@ public final class Setup {
         return marker.exists() && new File(root, "bin/bash").exists();
     }
 
+    /** Public probe used by the UI before asking for download consent. */
+    public boolean isRootfsReady() {
+        return rootfsReady();
+    }
+
     private boolean opencodeReady() {
         File f = opencode();
         return f.exists() && f.length() > 1024 && marker(VERSION_MARKER).exists()
