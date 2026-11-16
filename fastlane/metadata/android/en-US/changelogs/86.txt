@@ -1,0 +1,1 @@
+Attaching a photo or file now uses its original path instead of copying it into the uploads folder. When a provider hides the path, fallback copies are pruned automatically.

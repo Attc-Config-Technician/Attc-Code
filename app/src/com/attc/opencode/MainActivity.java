@@ -21,10 +21,13 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.ParcelFileDescriptor;
 import android.os.PowerManager;
+import android.provider.DocumentsContract;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.provider.Settings;
+import android.system.Os;
 import android.text.InputType;
 import android.text.TextUtils;
 import android.util.TypedValue;
@@ -50,6 +53,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Single-screen app: a status bar, the terminal and a Retry button that only
@@ -67,6 +73,7 @@ public final class MainActivity extends Activity implements Hub.Listener {
             {"opencode", "claude", "agy", "codex", "kimi"};
 
     // The local android.jar is API 28, so newer constants are declared here.
+    private static final int API_Q = 29;
     private static final int API_R = 30;
     private static final int API_TIRAMISU = 33;
     private static final String PERM_POST_NOTIFICATIONS =
@@ -79,6 +86,10 @@ public final class MainActivity extends Activity implements Hub.Listener {
     private static final String KEY_BOOT = "boot";
     private static final String KEY_STORAGE_ASKED = "storage_asked";
     private static final String KEY_DOWNLOAD_CONSENT = "download_consent";
+
+    /** Copy-fallback housekeeping: 7 days or 100 MB, whichever hits first. */
+    private static final long UPLOAD_MAX_AGE_MS = 7L * 24 * 60 * 60 * 1000;
+    private static final long UPLOAD_MAX_BYTES = 100L * 1024 * 1024;
 
     private TerminalView terminal;
     private TextView statusText;
@@ -1689,10 +1700,11 @@ public final class MainActivity extends Activity implements Hub.Listener {
 
     /**
      * Types the picked file's real Android path into the terminal. Content
-     * URIs are resolved to a filesystem path when the provider exposes one;
-     * otherwise the file is copied into the shared uploads folder and that
-     * real path is used. The guest sees /storage through a proot bind, so
-     * these paths work directly - no /root/attc translation.
+     * URIs are resolved to a filesystem path when the provider exposes one
+     * (see resolveRealPath); otherwise the file is copied into the shared
+     * uploads folder and that real path is used. The guest sees /storage
+     * through a proot bind, so these paths work directly - no /root/attc
+     * translation.
      */
     private void attach(Uri uri) {
         try {
@@ -1703,10 +1715,11 @@ public final class MainActivity extends Activity implements Hub.Listener {
                 safe = "file";
             }
             String real = resolveRealPath(uri);
+            boolean copied = false;
             if (real == null) {
                 File dir = new File(Setup.STORAGE_DIR, "uploads");
-                //noinspection ResultOfMethodCallIgnored
-                dir.mkdirs();
+                // Prune before writing so the new copy is never evicted.
+                pruneUploads(dir);
                 File out = new File(dir, System.currentTimeMillis() + "-" + safe);
                 try (InputStream in = getContentResolver().openInputStream(uri);
                      OutputStream os = new FileOutputStream(out)) {
@@ -1720,10 +1733,12 @@ public final class MainActivity extends Activity implements Hub.Listener {
                     }
                 }
                 real = out.getAbsolutePath();
+                copied = true;
             }
             String typed = shellQuote(real);
             terminal.paste(typed + " ");
-            toast("Attached " + safe);
+            toast(copied ? "Copied to uploads (provider hides the path)"
+                    : "Attached " + safe);
             Logger.i("attach: " + typed);
         } catch (Exception e) {
             toast("Attach failed: " + e.getMessage());
@@ -1731,8 +1746,74 @@ public final class MainActivity extends Activity implements Hub.Listener {
     }
 
     /**
-     * Best-effort real filesystem path for a picker URI. Returns null when the
-     * provider only exposes a stream, in which case the caller copies it.
+     * Keeps the copy fallback folder bounded: creates it, hides it from the
+     * media scanner once, then deletes app-created copies older than seven
+     * days and evicts the oldest app-created copies until they total at most
+     * 100 MB. Only names written by attach() (timestamp prefix) are eligible;
+     * other files, including anything the user put in the folder, are ignored
+     * and never deleted or counted. It runs before a new copy is written, so
+     * that copy is never a candidate.
+     */
+    private void pruneUploads(File dir) {
+        //noinspection ResultOfMethodCallIgnored
+        dir.mkdirs();
+        File noMedia = new File(dir, ".nomedia");
+        if (!noMedia.exists()) {
+            try {
+                //noinspection ResultOfMethodCallIgnored
+                noMedia.createNewFile();
+            } catch (IOException ignored) {
+            }
+        }
+        File[] files = dir.listFiles();
+        if (files == null) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        long total = 0;
+        List<File> kept = new ArrayList<>();
+        for (File f : files) {
+            // Same timestamp prefix as attach(); skip .nomedia and user files.
+            if (!f.isFile() || !f.getName().matches("[0-9]{13}-.+")) {
+                continue;
+            }
+            if (now - f.lastModified() > UPLOAD_MAX_AGE_MS) {
+                //noinspection ResultOfMethodCallIgnored
+                if (f.delete()) {
+                    continue;
+                }
+            }
+            kept.add(f);
+            total += f.length();
+        }
+        if (total <= UPLOAD_MAX_BYTES) {
+            return;
+        }
+        File[] oldest = kept.toArray(new File[0]);
+        Arrays.sort(oldest, (a, b) ->
+                Long.compare(a.lastModified(), b.lastModified()));
+        for (File f : oldest) {
+            if (total <= UPLOAD_MAX_BYTES) {
+                return;
+            }
+            long len = f.length();
+            //noinspection ResultOfMethodCallIgnored
+            if (f.delete()) {
+                total -= len;
+            }
+        }
+    }
+
+    /**
+     * Best-effort real filesystem path for a picker URI, in priority order:
+     * file:// paths; the provider's _data column; document ids of the
+     * DocumentsUI providers; the photo picker's numeric id, mapped straight
+     * to its MediaStore file uri; the media uri embedded in a Google Photos
+     * wrapper; MediaStore document ids and other picker forms via
+     * reflection; MediaStore relative_path plus display_name; and finally
+     * the kernel link behind an open descriptor. Returns null when the
+     * provider only exposes a stream, in which case the caller copies the
+     * file.
      */
     private String resolveRealPath(Uri uri) {
         if (uri == null) {
@@ -1744,17 +1825,288 @@ public final class MainActivity extends Activity implements Hub.Listener {
         if (!"content".equals(uri.getScheme())) {
             return null;
         }
+        String direct = queryDataColumn(uri);
+        if (direct != null) {
+            return direct;
+        }
+        String decoded = decodeDocumentId(uri);
+        if (decoded != null) {
+            return decoded;
+        }
+        // The Android 13 photo picker hides the row id in its own uri, but
+        // MediaStore still resolves content://media/external/file/<id>.
+        String picked = mediaPath(pickerIdMediaUri(uri));
+        if (picked != null) {
+            return picked;
+        }
+        // Google Photos wraps the media uri in one of its path segments.
+        if ("com.google.android.apps.photos.contentprovider"
+                .equals(uri.getAuthority())) {
+            String wrapped = mediaPath(embeddedMediaUri(uri));
+            if (wrapped != null) {
+                return wrapped;
+            }
+        }
+        Uri media = mediaDocumentsUri(uri);
+        if (media == null) {
+            media = pickerMediaUri(uri);
+        }
+        String viaMedia = mediaPath(media);
+        if (viaMedia != null) {
+            return viaMedia;
+        }
+        return readLinkPath(uri);
+    }
+
+    /** _data, or relative_path plus display_name, for a MediaStore uri. */
+    private String mediaPath(Uri media) {
+        if (media == null) {
+            return null;
+        }
+        String data = queryDataColumn(media);
+        if (data != null) {
+            return data;
+        }
+        return relativePathFromMedia(media);
+    }
+
+    /** Reads the hidden _data column; only readable /storage paths survive. */
+    private String queryDataColumn(Uri uri) {
         try (Cursor c = getContentResolver().query(uri,
                 new String[]{MediaStore.MediaColumns.DATA}, null, null, null)) {
             if (c != null && c.moveToFirst()) {
                 int idx = c.getColumnIndex(MediaStore.MediaColumns.DATA);
-                if (idx >= 0) {
+                if (idx >= 0 && !c.isNull(idx)) {
                     return normalizeStoragePath(c.getString(idx));
+                }
+            }
+        } catch (Exception e) {
+        }
+        return null;
+    }
+
+    /**
+     * Decodes the DocumentsUI document id into a path: "primary:dir/file"
+     * becomes /storage/emulated/0/dir/file, "1A2B-3C4D:dir/file" becomes
+     * /storage/1A2B-3C4D/dir/file and a downloads "raw:" id is its own path.
+     */
+    private String decodeDocumentId(Uri uri) {
+        String authority = uri.getAuthority();
+        if (!"com.android.externalstorage.documents".equals(authority)
+                && !"com.android.providers.downloads.documents"
+                .equals(authority)) {
+            return null;
+        }
+        String docId;
+        try {
+            docId = DocumentsContract.getDocumentId(uri);
+        } catch (Exception e) {
+            return null;
+        }
+        if (docId == null) {
+            return null;
+        }
+        if ("com.android.providers.downloads.documents".equals(authority)) {
+            return docId.startsWith("raw:")
+                    ? normalizeStoragePath(docId.substring("raw:".length()))
+                    : null;
+        }
+        int colon = docId.indexOf(':');
+        if (colon <= 0 || colon == docId.length() - 1) {
+            return null;
+        }
+        String volume = docId.substring(0, colon);
+        String rest = docId.substring(colon + 1);
+        String base = "primary".equals(volume)
+                ? "/storage/emulated/0" : "/storage/" + volume;
+        return normalizeStoragePath(base + "/" + rest);
+    }
+
+    /**
+     * Rebuilds the MediaStore uri behind a com.android.providers.media
+     * .documents id such as "image:1000013385".
+     */
+    private Uri mediaDocumentsUri(Uri uri) {
+        if (!"com.android.providers.media.documents"
+                .equals(uri.getAuthority())) {
+            return null;
+        }
+        String docId;
+        try {
+            docId = DocumentsContract.getDocumentId(uri);
+        } catch (Exception e) {
+            return null;
+        }
+        if (docId == null) {
+            return null;
+        }
+        int colon = docId.indexOf(':');
+        if (colon <= 0 || colon == docId.length() - 1) {
+            return null;
+        }
+        String type = docId.substring(0, colon);
+        String id = docId.substring(colon + 1);
+        String segment;
+        if ("image".equals(type)) {
+            segment = "images";
+        } else if ("video".equals(type)) {
+            segment = "video";
+        } else if ("audio".equals(type)) {
+            segment = "audio";
+        } else {
+            return null;
+        }
+        return Uri.parse("content://media/external/" + segment + "/media/" + id);
+    }
+
+    /**
+     * Maps an Android 13 photo-picker uri back to its MediaStore uri with
+     * MediaStore.getMediaUri(). The local android.jar is API 28, so the call
+     * is reflective and only attempted on API 29+.
+     */
+    private Uri pickerMediaUri(Uri uri) {
+        if (Build.VERSION.SDK_INT < API_Q) {
+            return null;
+        }
+        try {
+            Class<?> cls = Class.forName("android.provider.MediaStore");
+            Object out = cls.getMethod("getMediaUri", Context.class, Uri.class)
+                    .invoke(null, this, uri);
+            return out instanceof Uri ? (Uri) out : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Maps a photo-picker uri to its MediaStore file uri. The picker returns
+     * authority "media" with a path of
+     * picker[_get_content]/<volume>/<provider>/<collection>/<id>, and that
+     * numeric id is the MediaStore row id. Other media uris are rejected, so
+     * it is safe to try before the reflection lookup.
+     */
+    private Uri pickerIdMediaUri(Uri uri) {
+        if (uri == null || !"media".equals(uri.getAuthority())) {
+            return null;
+        }
+        List<String> segments = uri.getPathSegments();
+        if (segments.isEmpty()) {
+            return null;
+        }
+        String kind = segments.get(0);
+        if (!"picker".equals(kind) && !"picker_get_content".equals(kind)) {
+            return null;
+        }
+        String id = uri.getLastPathSegment();
+        if (id == null || !id.matches("[0-9]{1,19}")) {
+            return null;
+        }
+        Uri out = Uri.parse("content://media/external/file/" + id);
+        return out;
+    }
+
+    /**
+     * Extracts the MediaStore uri that Google Photos embeds as a path segment
+     * of its contentprovider wrapper. getPathSegments() already decodes it.
+     * Returns null when no segment is a media uri.
+     */
+    private Uri embeddedMediaUri(Uri uri) {
+        if (uri == null) {
+            return null;
+        }
+        for (String segment : uri.getPathSegments()) {
+            if (segment == null || !segment.startsWith("content://")) {
+                continue;
+            }
+            Uri inner;
+            try {
+                inner = Uri.parse(segment);
+            } catch (Exception e) {
+                continue;
+            }
+            if (!"media".equals(inner.getAuthority())) {
+                continue;
+            }
+            Uri picker = pickerIdMediaUri(inner);
+            if (picker != null) {
+                return picker;
+            }
+            // Already a MediaStore uri: .../[images|video|audio]/media/<id>.
+            List<String> innerSegments = inner.getPathSegments();
+            int last = innerSegments.size() - 1;
+            if (last >= 1 && "media".equals(innerSegments.get(last - 1))
+                    && innerSegments.get(last).matches("[0-9]{1,19}")) {
+                return inner;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Rebuilds a path from MediaStore's relative_path and display_name when
+     * a provider hides _data. Both columns are queried as string literals so
+     * the API 28 android.jar stays usable.
+     */
+    private String relativePathFromMedia(Uri media) {
+        String relative = null;
+        String name = null;
+        try (Cursor c = getContentResolver().query(media,
+                new String[]{"relative_path", "display_name"},
+                null, null, null)) {
+            if (c != null && c.moveToFirst()) {
+                int rp = c.getColumnIndex("relative_path");
+                if (rp >= 0 && !c.isNull(rp)) {
+                    relative = c.getString(rp);
+                }
+                int dn = c.getColumnIndex("display_name");
+                if (dn >= 0 && !c.isNull(dn)) {
+                    name = c.getString(dn);
                 }
             }
         } catch (Exception ignored) {
         }
-        return null;
+        if (relative == null || name == null) {
+            return null;
+        }
+        if (!relative.startsWith("/")) {
+            relative = "/" + relative;
+        }
+        if (!relative.endsWith("/")) {
+            relative = relative + "/";
+        }
+        List<String> segments = media.getPathSegments();
+        String volume = segments.isEmpty() ? null : segments.get(0);
+        if (volume == null) {
+            return null;
+        }
+        String base = "external".equals(volume)
+                ? "/storage/emulated/0" : "/storage/" + volume;
+        return normalizeStoragePath(base + relative + name);
+    }
+
+    /**
+     * Last native fallback: reads the kernel link of an opened descriptor,
+     * which recovers the real file behind FUSE providers.
+     */
+    private String readLinkPath(Uri uri) {
+        ParcelFileDescriptor pfd = null;
+        try {
+            pfd = getContentResolver().openFileDescriptor(uri, "r");
+            if (pfd == null) {
+                return null;
+            }
+            String link = Os.readlink("/proc/self/fd/" + pfd.getFd());
+            return normalizeStoragePath(link);
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (pfd != null) {
+                try {
+                    pfd.close();
+                } catch (Exception ignored) {
+                }
+            }
+        }
     }
 
     /**

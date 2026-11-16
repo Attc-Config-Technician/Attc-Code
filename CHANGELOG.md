@@ -3,6 +3,16 @@
 All notable changes to Attc Code are documented here. Versions follow the
 `versionName` shipped in the APK; `versionCode` is in parentheses.
 
+## 5.18.1 (86) — 2026-11-16
+
+- **Attach the original file, not a copy.** Picking a photo or file now
+  resolves its real Android path for Android 13 photo-picker URIs, DocumentsUI
+  document ids, MediaStore rows and FUSE descriptors, so attaching a photo or
+  video no longer duplicates it into `uploads/`.
+- When a provider genuinely hides the path, the copy fallback is bounded:
+  `uploads/` gets a `.nomedia` marker, app-created copies older than 7 days are
+  removed, and the folder is kept at or below 100 MB.
+
 ## 5.18 (85) — 2026-11-15
 
 - **Explicit download consent.** Before the first Ubuntu root filesystem or CLI
