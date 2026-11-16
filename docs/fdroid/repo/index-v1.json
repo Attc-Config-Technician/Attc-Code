@@ -1,6 +1,6 @@
 {
   "repo": {
-    "timestamp": 1794824555000,
+    "timestamp": 1794850115000,
     "version": 20002,
     "name": "Attc Code",
     "icon": "icon.png",
@@ -23,8 +23,8 @@
       "categories": [
         "Development"
       ],
-      "suggestedVersionName": "5.18.1",
-      "suggestedVersionCode": "86",
+      "suggestedVersionName": "5.18.2",
+      "suggestedVersionCode": "87",
       "description": "Attc Code boots a real Ubuntu 24.04 arm64 userland on Android with proot\nand runs AI coding CLIs inside it. No root access is required.\n\nChoose a CLI on every cold start: opencode with Zen models, Claude Code,\nAntigravity, Codex, Kimi Code, or a plain Ubuntu terminal. Warm sessions\nkeep their working directory and the model you last used.\n\nWith the optional offline voice assistant, say \"Hey Attc\" even while the\nscreen is off. The wake word is a personal on-device model built from three\nrecordings; the recognised Turkish sentence is typed into the active CLI.\nShizuku is optional and only adds the phone-control bridge.\n",
       "issueTracker": "https://github.com/Attc-Config-Technician/Attc-Code/issues",
       "license": "GPL-3.0-or-later",
@@ -33,9 +33,9 @@
       "summary": "Ubuntu 24.04 and AI coding CLIs on Android, without root.",
       "webSite": "https://attc-config-technician.github.io/Attc-Code/",
       "added": 1794692098000,
-      "icon": "com.attc.opencode.86.png",
+      "icon": "com.attc.opencode.87.png",
       "packageName": "com.attc.opencode",
-      "lastUpdated": 1794824554000,
+      "lastUpdated": 1794850114000,
       "localized": {
         "en-US": {
           "description": "Attc Code boots a real Ubuntu 24.04 arm64 userland on Android with proot, without root, and runs AI coding CLIs inside it.\n\nOn every cold start you choose what to launch:\n\u2022 Attc Code \u2014 opencode with the Zen models\n\u2022 Claude Code \u2014 Anthropic CLI through the in-app gateway\n\u2022 Antigravity \u2014 Google's agent CLI\n\u2022 Codex \u2014 OpenAI coding CLI\n\u2022 Kimi Code \u2014 Moonshot coding CLI\n\u2022 Terminal \u2014 a plain Ubuntu shell\n\nA warm session resumes where it left off. Fully Close ends it, and the next open asks again.\n\nVOICE ASSISTANT\nSay \u201cHey Attc\u201d with the screen off. The wake word is a personal, fully offline model built from three recordings (MFCC/DTW), so no cloud key is required. The phrase is selectable in Settings: presets or custom text. After the wake word, Turkish speech is transcribed by the device recognition service and typed into the selected CLI session, keeping the model you last selected there. With Shizuku installed, the bundled attc-ctl helper lets the agent open apps and control media through shell commands.\n\nTERMINAL FEATURES\n\u2022 Termux-style extra keys and two-row key bar\n\u2022 Tap-to-open keyboard, pinch-to-zoom, long-press text selection\n\u2022 Attachments from the system file picker and gallery\n\u2022 Sessions and produced files panel\n\u2022 Persistent foreground notification with keep-awake and fully-close actions\n\u2022 /root/attc is bound to /storage/emulated/0/ATTC OPENCODE, and device paths such as /sdcard and /system are visible inside Ubuntu\n\u2022 Optional fake-IP mode for privacy inside the guest\n\nREQUIREMENTS\nAndroid 8.0 or newer, arm64 device, about 2 GB free storage for the Ubuntu userland. Shizuku is optional and only needed for phone control (opening apps, media, input). Root is not required.\n\nPERMISSIONS\n\u2022 Microphone: only when you enable the voice assistant; used for the wake word and command capture.\n\u2022 Notifications: foreground service status.\n\u2022 All files access: optional, for the shared folder and attachments.\n\nSpeech recognition may use the device's Google recognition service and can go online. Wake-word detection is offline; voice templates stay on the phone.\n\nAttc Code is free software under GPL-3.0-or-later. Source code, issue tracker and releases: https://github.com/Attc-Config-Technician/Attc-Code\n",
@@ -54,6 +54,85 @@
   ],
   "packages": {
     "com.attc.opencode": [
+      {
+        "added": 1794850114000,
+        "apkName": "com.attc.opencode_87.apk",
+        "hash": "a16c3d4e76100c2359039b597165b592c16c3bdd7beb54e184ea53be6875dcba",
+        "hashType": "sha256",
+        "minSdkVersion": 26,
+        "nativecode": [
+          "arm64-v8a"
+        ],
+        "packageName": "com.attc.opencode",
+        "sig": "4e1bb1a9dcfa7ec353a7ddbf8d6aafa3",
+        "signer": "791435ce1087c7841019c82429d1f333dc9c95bb2aa0f24e55594b1d43f72a85",
+        "size": 448722,
+        "targetSdkVersion": 28,
+        "uses-permission": [
+          [
+            "android.permission.INTERNET",
+            null
+          ],
+          [
+            "android.permission.ACCESS_NETWORK_STATE",
+            null
+          ],
+          [
+            "android.permission.CHANGE_NETWORK_STATE",
+            null
+          ],
+          [
+            "android.permission.WAKE_LOCK",
+            null
+          ],
+          [
+            "android.permission.FOREGROUND_SERVICE",
+            null
+          ],
+          [
+            "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+            null
+          ],
+          [
+            "android.permission.RECORD_AUDIO",
+            null
+          ],
+          [
+            "android.permission.MODIFY_AUDIO_SETTINGS",
+            null
+          ],
+          [
+            "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+            null
+          ],
+          [
+            "android.permission.POST_NOTIFICATIONS",
+            null
+          ],
+          [
+            "android.permission.RECEIVE_BOOT_COMPLETED",
+            null
+          ],
+          [
+            "android.permission.MANAGE_EXTERNAL_STORAGE",
+            null
+          ],
+          [
+            "moe.shizuku.manager.permission.API_V23",
+            null
+          ],
+          [
+            "android.permission.WRITE_EXTERNAL_STORAGE",
+            29
+          ],
+          [
+            "android.permission.READ_EXTERNAL_STORAGE",
+            29
+          ]
+        ],
+        "versionCode": 87,
+        "versionName": "5.18.2"
+      },
       {
         "added": 1794824554000,
         "apkName": "com.attc.opencode_86.apk",
