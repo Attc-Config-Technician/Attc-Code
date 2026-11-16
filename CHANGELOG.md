@@ -3,6 +3,25 @@
 All notable changes to Attc Code are documented here. Versions follow the
 `versionName` shipped in the APK; `versionCode` is in parentheses.
 
+## 5.18.2 (87) — 2026-11-16
+
+- **Self-healing CLI install.** Launching Claude Code, Kimi Code or
+  Antigravity now checks for its launcher first and runs the official
+  installer when it is missing, instead of failing with “command not found”.
+  Kimi is relinked when its runtime is already unpacked.
+- **App updates no longer wipe the Ubuntu rootfs.** When the root marker is
+  missing, the base archive is extracted over the existing tree instead of
+  deleting it, so installed CLIs, packages and files survive.
+- `/root/.kimi-code/bin` joins `/root/.local/bin` on the PATH of every CLI
+  session, and the guest `/tmp` keeps its sticky bit.
+- Claude Code settings are written without python3: when the interpreter is
+  absent, the gateway settings and onboarding flags are written directly.
+- **TUIs stay legible after scrolling.** The screen model now writes to the
+  visible row instead of the top of the scrollback list, and implements
+  DECSTBM scroll regions, insert/delete line inside a region, and reverse
+  index. This fixes duplicated lines, overwritten characters and stale help
+  text in full-screen menus such as Antigravity's `/model` picker.
+
 ## 5.18.1 (86) — 2026-11-16
 
 - **Attach the original file, not a copy.** Picking a photo or file now

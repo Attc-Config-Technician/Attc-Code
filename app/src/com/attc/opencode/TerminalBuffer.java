@@ -12,7 +12,8 @@ import java.util.ArrayList;
  *
  * Deliberately not a complete emulator. It covers what a shell and a TUI like
  * opencode actually emit: CUP/CUU/CUD/CUF/CUB, ED/EL, IL/DL, ICH/DCH/ECH,
- * SGR (16/256/truecolour), DEC private modes 25 and 1049, and scrolling.
+ * SGR (16/256/truecolour), DEC private modes 25 and 1049, DECSTBM scroll
+ * regions, reverse index and scrolling.
  */
 public final class TerminalBuffer {
 
@@ -60,6 +61,10 @@ public final class TerminalBuffer {
     private boolean cursorVisible = true;
     private boolean mouseMode;
     private boolean mouseSgr;
+
+    // DECSTBM scroll region, in visible row coordinates and inclusive.
+    private int scrollTop;
+    private int scrollBottom;
 
     private int fg = DEFAULT_FG;
     private int bg = DEFAULT_BG;
@@ -118,6 +123,8 @@ public final class TerminalBuffer {
             alt.add(new Line(cols));
         }
         altActive = false;
+        scrollTop = 0;
+        scrollBottom = rows - 1;
         cx = 0;
         cy = 0;
         wrapPending = false;
@@ -284,6 +291,8 @@ public final class TerminalBuffer {
 
         rows = newRows;
         cols = newCols;
+        scrollTop = 0;
+        scrollBottom = rows - 1;
         cx = Math.min(cx, cols - 1);
         cy = Math.min(cy, rows - 1);
         if (shownX >= cols) {
@@ -325,12 +334,24 @@ public final class TerminalBuffer {
         return altActive ? alt : lines;
     }
 
+    /**
+     * Maps a visible row (0 is the top of the screen) to its line. The normal
+     * screen keeps scrollback in front of the viewport, so the visible screen
+     * starts at {@code lines.size() - rows}; indexing the list directly would
+     * address an old scrollback row instead.
+     */
     private Line row(int y) {
-        ArrayList<Line> list = active();
-        if (list.isEmpty()) {
+        if (altActive) {
+            if (alt.isEmpty()) {
+                return null;
+            }
+            return alt.get(clamp(y, 0, alt.size() - 1));
+        }
+        int idx = lines.size() - rows + clamp(y, 0, rows - 1);
+        if (idx < 0 || idx >= lines.size()) {
             return null;
         }
-        return list.get(clamp(y, 0, list.size() - 1));
+        return lines.get(idx);
     }
 
     private int effFg() {
@@ -430,6 +451,17 @@ public final class TerminalBuffer {
             case '8':
                 cx = savedX;
                 cy = savedY;
+                state = GROUND;
+                return;
+            case 'M':
+                // Reverse index: at the top of the scroll region the screen
+                // scrolls down, otherwise the cursor moves up one row.
+                wrapPending = false;
+                if (cy == scrollTop) {
+                    scrollDown(1);
+                } else {
+                    cy--;
+                }
                 state = GROUND;
                 return;
             case 'c':
@@ -558,6 +590,28 @@ public final class TerminalBuffer {
             case 'd':
                 cy = clamp(n(p, 0, 1) - 1, 0, rows - 1);
                 break;
+            case 'r': {
+                // DECSTBM: top and bottom are 1-based visible rows. An invalid
+                // pair restores the full-screen region.
+                int top = n(p, 0, 1);
+                int bottom = n(p, 1, rows);
+                if (top >= 1 && bottom <= rows && top < bottom) {
+                    scrollTop = top - 1;
+                    scrollBottom = bottom - 1;
+                } else {
+                    scrollTop = 0;
+                    scrollBottom = rows - 1;
+                }
+                cx = 0;
+                cy = 0;
+                break;
+            }
+            case 'S':
+                scrollUp(n(p, 0, 1));
+                break;
+            case 'T':
+                scrollDown(n(p, 0, 1));
+                break;
             case 'H':
             case 'f':
                 cy = clamp(n(p, 0, 1) - 1, 0, rows - 1);
@@ -628,6 +682,8 @@ public final class TerminalBuffer {
             return;
         }
         altActive = toAlt;
+        scrollTop = 0;
+        scrollBottom = rows - 1;
         wrapPending = false;
         if (toAlt) {
             for (Line l : alt) {
@@ -667,18 +723,28 @@ public final class TerminalBuffer {
 
     private void lineFeed() {
         wrapPending = false;
-        if (cy == rows - 1) {
+        if (cy == scrollBottom) {
             scrollUp(1);
-        } else {
+        } else if (cy < rows - 1) {
             cy++;
         }
     }
 
+    /**
+     * Scrolls the active region up by {@code n} rows. Outside the normal
+     * screen's full-height region this shifts visible rows only; the full
+     * region appends to scrollback instead so earlier output stays reachable.
+     */
     private void scrollUp(int n) {
-        if (altActive) {
+        boolean full = scrollTop == 0 && scrollBottom == rows - 1;
+        if (altActive || !full) {
+            ArrayList<Line> list = active();
+            int base = altActive ? 0 : lines.size() - rows;
+            int top = base + scrollTop;
+            int bottom = base + scrollBottom;
             for (int i = 0; i < n; i++) {
-                alt.remove(0);
-                alt.add(new Line(cols));
+                list.remove(top);
+                list.add(bottom, new Line(cols));
             }
             return;
         }
@@ -690,34 +756,47 @@ public final class TerminalBuffer {
         }
     }
 
-    private void insertLines(int n) {
+    /** Scrolls the active region down by {@code n} rows, dropping its bottom. */
+    private void scrollDown(int n) {
         ArrayList<Line> list = active();
-        int base = list == lines ? lines.size() - rows : 0;
-        int at = base + cy;
+        int base = altActive ? 0 : lines.size() - rows;
+        int top = base + scrollTop;
+        int bottom = base + scrollBottom;
         for (int i = 0; i < n; i++) {
-            list.add(Math.min(at, list.size()), new Line(cols));
-        }
-        while (list.size() > (list == lines ? MAX_LINES : rows)) {
-            if (list == lines) {
-                list.remove(0);
-            } else {
-                list.remove(list.size() - 1);
-            }
+            list.remove(bottom);
+            list.add(top, new Line(cols));
         }
     }
 
+    /**
+     * IL: opens blank rows at the cursor and pushes the region's tail off its
+     * bottom. Only rows from the cursor to the region bottom move.
+     */
+    private void insertLines(int n) {
+        ArrayList<Line> list = active();
+        int base = altActive ? 0 : lines.size() - rows;
+        int at = base + clamp(cy, 0, rows - 1);
+        int bottom = base + scrollBottom;
+        int count = Math.min(n, bottom - at + 1);
+        for (int i = 0; i < count; i++) {
+            list.remove(bottom);
+            list.add(at, new Line(cols));
+        }
+    }
+
+    /**
+     * DL: removes rows at the cursor and pulls the rest of the region up,
+     * leaving blanks at the region bottom.
+     */
     private void deleteLines(int n) {
         ArrayList<Line> list = active();
-        int base = list == lines ? lines.size() - rows : 0;
-        int at = base + cy;
-        for (int i = 0; i < n && at < list.size(); i++) {
-            if (list == lines && list.size() <= rows) {
-                break;
-            }
+        int base = altActive ? 0 : lines.size() - rows;
+        int at = base + clamp(cy, 0, rows - 1);
+        int bottom = base + scrollBottom;
+        int count = Math.min(n, bottom - at + 1);
+        for (int i = 0; i < count; i++) {
             list.remove(at);
-        }
-        while (list.size() < (list == lines ? 0 : rows)) {
-            list.add(new Line(cols));
+            list.add(bottom, new Line(cols));
         }
     }
 

@@ -65,6 +65,15 @@ public class TerminalService extends Service {
     private static final String CHANNEL = "attc_opencode";
     private static final int NOTIFICATION_ID = 7;
 
+    /** Official installers for the CLIs the app can launch. */
+    private static final String CLAUDE_INSTALL = "https://claude.ai/install.sh";
+    private static final String KIMI_INSTALL = "https://code.kimi.com/kimi-code/install.sh";
+    private static final String AGY_INSTALL = "https://antigravity.google/cli/install.sh";
+
+    /** Minimal PATH an installer needs; the login shell may not have one. */
+    private static final String GUEST_PATH =
+            "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/.local/bin";
+
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
 
     private static volatile TerminalService current;
@@ -408,6 +417,9 @@ public class TerminalService extends Service {
         // list the gateway models instead of forcing Haiku.
         String script = ""
                 + "mkdir -p /root\n"
+                // python3 is missing in some Ubuntu rootfs images, so the
+                // settings files are written by hand when it is unavailable.
+                + "if command -v python3 >/dev/null 2>&1; then\n"
                 + "python3 - <<'PY'\n"
                 + "import json, os\n"
                 + "p = '/root/.claude/settings.json'\n"
@@ -439,7 +451,25 @@ public class TerminalService extends Service {
                 + "        'hasCompletedProjectOnboarding': True,\n"
                 + "    }\n"
                 + "json.dump(c, open(q, 'w'))\n"
-                + "PY\n";
+                + "PY\n"
+                + "else\n"
+                + "mkdir -p /root/.claude\n"
+                + "cat > /root/.claude/settings.json <<'JSON'\n"
+                + "{\"env\":{\"ANTHROPIC_BASE_URL\":\"http://127.0.0.1:8797\","
+                + "\"ANTHROPIC_AUTH_TOKEN\":\"attc\","
+                + "\"CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY\":\"1\","
+                + "\"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC\":\"1\","
+                + "\"CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT\":\"1\"},"
+                + "\"theme\":\"dark\"}\n"
+                + "JSON\n"
+                + "cat > /root/.claude.json <<'JSON'\n"
+                + "{\"hasCompletedOnboarding\":true,\"projects\":{"
+                + "\"/root\":{\"hasTrustDialogAccepted\":true,"
+                + "\"hasCompletedProjectOnboarding\":true},"
+                + "\"/root/attc/workspace\":{\"hasTrustDialogAccepted\":true,"
+                + "\"hasCompletedProjectOnboarding\":true}}}\n"
+                + "JSON\n"
+                + "fi\n";
         try {
             guestHome().mkdirs();
             java.io.FileOutputStream out = new java.io.FileOutputStream(
@@ -482,6 +512,13 @@ public class TerminalService extends Service {
         Hub.setStatus("Running");
         SessionStore.record(cli);
         Logger.i("session: launching " + cli);
+        // A fresh install or an app update can leave the CLI missing again;
+        // install it once here instead of failing with "command not found".
+        if (("claude".equals(cli) || "kimi".equals(cli) || "agy".equals(cli))
+                && !cliInstalled(cli)) {
+            installCli(cli);
+            return;
+        }
         // After a CLI returns, write a marker the service watches. The shared
         // folder is reachable as /root/attc from inside the guest.
         String exitMark = "; printf '%s' \"$?\" > /root/attc/cli-exit";
@@ -489,7 +526,7 @@ public class TerminalService extends Service {
             // Claude Code talks to the in-app gateway, which speaks the
             // Anthropic Messages API and forwards to the free Zen models.
             prepareClaude();
-            session.write("export PATH=/root/.local/bin:$PATH\r");
+            session.write("export PATH=/root/.local/bin:/root/.kimi-code/bin:$PATH\r");
             session.write("export ANTHROPIC_BASE_URL=http://127.0.0.1:8797"
                     + " ANTHROPIC_AUTH_TOKEN=attc"
                     + " CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1"
@@ -498,7 +535,7 @@ public class TerminalService extends Service {
             session.write("sh /root/attc/claude-env.sh\r");
             session.write("cd /root; claude" + exitMark + "\r");
         } else if ("agy".equals(cli)) {
-            session.write("export PATH=/root/.local/bin:$PATH\r");
+            session.write("export PATH=/root/.local/bin:/root/.kimi-code/bin:$PATH\r");
             session.write("cd /root; agy" + exitMark + "\r");
         } else if ("codex".equals(cli)) {
             Setup s = setup;
@@ -512,7 +549,7 @@ public class TerminalService extends Service {
             // immediate "no complete local package" exit.
             session.write("cd /root; codex --no-daemon" + exitMark + "\r");
         } else if ("kimi".equals(cli)) {
-            session.write("export PATH=/root/.local/bin:$PATH\r");
+            session.write("export PATH=/root/.local/bin:/root/.kimi-code/bin:$PATH\r");
             // The OAuth device request is the one call that must stay quick.
             // Sending it through the loopback egress proxy adds several
             // seconds; auth.kimi.com is reachable directly (about 1s), so
@@ -523,7 +560,7 @@ public class TerminalService extends Service {
         } else if ("terminal".equals(cli)) {
             // Plain shell: nothing to launch, but make the installed CLIs
             // available if the user starts one by hand.
-            session.write("export PATH=/root/.local/bin:$PATH\r");
+            session.write("export PATH=/root/.local/bin:/root/.kimi-code/bin:$PATH\r");
             session.write("cd /root\r");
         } else {
             // The installed wrapper already appends --standalone, so passing it
@@ -580,6 +617,101 @@ public class TerminalService extends Service {
                 updateNotification();
             }
         }, "codex-install").start();
+    }
+
+    /**
+     * True when the CLI's launcher exists in the guest user's bin folder.
+     * The no-follow check keeps the launch path fast and works even while the
+     * guest is busy; the installer writes here on a successful run. Following
+     * the link would fail because its target is an absolute guest path that
+     * the Android process cannot resolve.
+     */
+    private boolean cliInstalled(String cli) {
+        Setup s = setup != null ? setup : new Setup(this);
+        java.nio.file.Path launcher = new File(s.rootDir(), "root/.local/bin/" + cli).toPath();
+        return java.nio.file.Files.exists(launcher, java.nio.file.LinkOption.NOFOLLOW_LINKS);
+    }
+
+    /**
+     * Installs a missing CLI with its official installer and then relaunches
+     * it. Runs on the worker thread because the installer downloads packages
+     * and may take a few minutes on a phone.
+     */
+    private void installCli(final String cli) {
+        final Setup s = setup != null ? setup : new Setup(this);
+        final String name = cliDisplay(cli);
+        final String url = cliInstallUrl(cli);
+        emit("");
+        emit(name + " is not installed in this Ubuntu environment.");
+        emit("Installing it with the official installer (one time, this can take a few minutes)...");
+        Hub.setStatus("Installing " + name + "...");
+        Logger.i("cli: installing " + cli);
+        worker.execute(() -> {
+            String script;
+            if ("kimi".equals(cli)
+                    && new File(s.rootDir(), "root/.kimi-code/bin/kimi").exists()) {
+                // The official installer already unpacked its runtime; only
+                // the launcher in ~/.local/bin is missing.
+                script = "export PATH=" + GUEST_PATH + "\n"
+                        + "ln -sf /root/.kimi-code/bin/kimi /root/.local/bin/kimi\n"
+                        + "test -x /root/.local/bin/kimi || exit 1\n"
+                        + "command -v kimi\n";
+            } else {
+                script = "export PATH=" + GUEST_PATH + "\n"
+                        + "export DEBIAN_FRONTEND=noninteractive\n"
+                        + "command -v curl >/dev/null 2>&1 || {"
+                        + " apt-get update -qq >/dev/null 2>&1;"
+                        + " apt-get install -y -qq curl ca-certificates >/dev/null 2>&1; }\n"
+                        + "curl -fsSL " + url + " | bash\n"
+                        + "command -v " + cli + "\n";
+            }
+            String out = runGuestOnceTimeout(600000L, "/bin/bash", "-lc", script);
+            Logger.i("cli: install " + cli + " ->\n" + out);
+            java.util.List<String> tail = new java.util.ArrayList<>();
+            for (String line : out.split("\n")) {
+                if (line.trim().length() > 0) {
+                    tail.add(line);
+                }
+            }
+            for (int i = Math.max(0, tail.size() - 20); i < tail.size(); i++) {
+                emit(tail.get(i));
+            }
+            if (cliInstalled(cli)) {
+                emit("Installed. Starting " + name + ".");
+                handler.postDelayed(() -> launchIntoSession(cli), 1500L);
+            } else {
+                emit("Install failed. Manual command: curl -fsSL " + url + " | bash");
+                Hub.setStatus("Running");
+            }
+        });
+    }
+
+    /** Human name used in the installer messages. */
+    private static String cliDisplay(String cli) {
+        if ("claude".equals(cli)) {
+            return "Claude Code";
+        }
+        if ("kimi".equals(cli)) {
+            return "Kimi Code";
+        }
+        if ("agy".equals(cli)) {
+            return "Antigravity";
+        }
+        return cli;
+    }
+
+    /** Official installer URL for a CLI. */
+    private static String cliInstallUrl(String cli) {
+        if ("claude".equals(cli)) {
+            return CLAUDE_INSTALL;
+        }
+        if ("kimi".equals(cli)) {
+            return KIMI_INSTALL;
+        }
+        if ("agy".equals(cli)) {
+            return AGY_INSTALL;
+        }
+        return "";
     }
 
     private void startSession() {

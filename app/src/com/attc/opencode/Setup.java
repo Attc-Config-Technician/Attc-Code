@@ -112,10 +112,7 @@ public final class Setup {
                 verifyEnvironment();
             } else {
                 if (root.exists()) {
-                    p.line("Replacing the previous Ubuntu environment...");
-                    deleteTree(root);
-                    //noinspection ResultOfMethodCallIgnored
-                    root.mkdirs();
+                    p.line("Repairing the Ubuntu environment...");
                 }
                 p.line("Downloading Ubuntu 24.04 base (arm64), about 30 MB...");
                 File tgz = new File(cache, "ubuntu-base.tar.gz");
@@ -623,7 +620,14 @@ public final class Setup {
         }
     }
 
-    private void prepareRuntime() throws IOException {        File etc = new File(root, "etc");
+    private void prepareRuntime() throws IOException {
+        // /tmp must be world-writable with the sticky bit, or package
+        // installers running as root fail on files left by another user.
+        File tmp = new File(root, "tmp");
+        if (tmp.exists()) {
+            chmod(tmp, 01777);
+        }
+        File etc = new File(root, "etc");
         File resolv = new File(etc, "resolv.conf");
         if (!resolv.exists() || resolv.length() == 0) {
             write(resolv, "nameserver 1.1.1.1\nnameserver 8.8.8.8\nnameserver 9.9.9.9\n");

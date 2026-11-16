@@ -31,3 +31,13 @@ javac -source 8 -target 8 -nowarn \
 
 java -cp "$OUT:$ANDROID_JAR:$SHIZUKU_CP" FakeVpnTest
 java -cp "$OUT:$ANDROID_JAR:$SHIZUKU_CP" PluginsTest
+
+# TerminalBuffer has no Android imports; it shares the classpath so the same
+# command works wherever the other suites run.
+javac -source 8 -target 8 -nowarn \
+  -classpath "$ANDROID_JAR:$SHIZUKU_CP" \
+  -d "$OUT" \
+  "$ROOT/tools/TerminalBufferTest.java" \
+  "$ROOT/app/src/com/attc/opencode/TerminalBuffer.java"
+
+java -cp "$OUT:$ANDROID_JAR:$SHIZUKU_CP" TerminalBufferTest
