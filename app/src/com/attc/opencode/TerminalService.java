@@ -47,7 +47,6 @@ public class TerminalService extends Service {
     public static final String ACTION_GUEST_AUTH = "com.attc.opencode.GUEST_AUTH";
     public static final String ACTION_RUN_PROBE = "com.attc.opencode.RUN_PROBE";
     public static final String ACTION_FS_TEST = "com.attc.opencode.FS_TEST";
-    public static final String ACTION_SOUND_TEST = "com.attc.opencode.SOUND_TEST";
     public static final String ACTION_GUEST_CMD = "com.attc.opencode.GUEST_CMD";
     public static final String ACTION_VOICE_ENABLE = "com.attc.opencode.VOICE_ENABLE";
     public static final String ACTION_VOICE_DISABLE = "com.attc.opencode.VOICE_DISABLE";
@@ -56,6 +55,8 @@ public class TerminalService extends Service {
     public static final String ACTION_VOICE_WAKE_TEST = "com.attc.opencode.VOICE_WAKE_TEST";
     /** CLI picked in the start screen: opencode, claude, agy, codex or kimi. */
     public static final String EXTRA_CLI = "cli";
+    /** Send /voice live shortly after Antigravity starts. */
+    static final String PREF_AGY_VOICE = "agy_auto_voice";
     public static final String EXTRA_VOICE_TEXT = "voice_text";
 
     /** Test instrumentation for the voice pipeline. */
@@ -86,6 +87,7 @@ public class TerminalService extends Service {
     private volatile String pendingCli;
     private volatile String status = "Starting...";
     private volatile boolean cliRunning;
+    private volatile String activeCli;
     private volatile long cliStartedAt;
     private SharedPreferences prefs;
 
@@ -135,6 +137,24 @@ public class TerminalService extends Service {
         handler.postDelayed(cliExitTick, 1000);
         VoiceBridge.start(this);
         VoiceBridge.install(this);
+        AudioBridge.setListener(new AudioBridge.Listener() {
+            @Override
+            public void onMicStart() {
+                // A CLI is recording now; the wake-word engine must release
+                // the microphone or Android hands it an empty stream.
+                handler.post(TerminalService.this::stopVoice);
+            }
+
+            @Override
+            public void onMicStop() {
+                handler.post(() -> {
+                    if (voiceEnabled()) {
+                        startVoice();
+                    }
+                });
+            }
+        });
+        AudioBridge.start(this);
         if (voiceEnabled() && VoiceEngine.hasPermission(this)
                 && VoiceEngine.hasTemplates(this)) {
             startVoice();
@@ -205,10 +225,6 @@ public class TerminalService extends Service {
             case ACTION_FS_TEST:
                 startForeground(NOTIFICATION_ID, buildNotification());
                 worker.execute(this::runFsTest);
-                return START_STICKY;
-            case ACTION_SOUND_TEST:
-                startForeground(NOTIFICATION_ID, buildNotification());
-                worker.execute(this::runSoundTest);
                 return START_STICKY;
             case ACTION_GUEST_CMD: {
                 startForeground(NOTIFICATION_ID, buildNotification());
@@ -298,7 +314,6 @@ public class TerminalService extends Service {
     private void boot() {
         Hub.failed = false;
         Hub.buffer = new TerminalBuffer(24, 80);
-        attachBufferSound(Hub.buffer);
         Hub.clearTail();
         Hub.setStatus("Starting...");
         emit("Attc code");
@@ -315,7 +330,6 @@ public class TerminalService extends Service {
         if (Hub.buffer == null) {
             Hub.buffer = new TerminalBuffer(24, 80);
         }
-        attachBufferSound(Hub.buffer);
         emit("");
         emit("Retrying...");
         booting = true;
@@ -332,7 +346,6 @@ public class TerminalService extends Service {
         Hub.failed = false;
         booting = true;
         Hub.buffer = new TerminalBuffer(24, 80);
-        attachBufferSound(Hub.buffer);
         Hub.setStatus("Restarting...");
         emit("Restarting terminal...");
         runSetup();
@@ -382,32 +395,58 @@ public class TerminalService extends Service {
         });
     }
 
-    /**
-     * Turns terminal BELs and opencode's OSC 7501 state changes into Android
-     * notification tones. Lives on the buffer so it still works while the
-     * activity is in the background but the foreground service is running.
-     */
-    private void attachBufferSound(TerminalBuffer buffer) {
-        if (buffer == null) {
-            return;
-        }
-        buffer.setListener(new TerminalBuffer.Listener() {
-            @Override
-            public void onBell() {
-                Sound.play(TerminalService.this, Sound.BELL);
-            }
-
-            @Override
-            public void onAttention(boolean blocked) {
-                Sound.play(TerminalService.this, blocked ? Sound.ATTENTION : Sound.DONE);
-            }
-        });
-    }
-
     /** The guest user's home: the CLI must see the whole device from here. */
     private File guestHome() {
         File root = setup != null ? setup.rootDir() : new Setup(this).rootDir();
         return new File(root, "root");
+    }
+
+    /**
+     * Antigravity wraps model-generated shell commands in its own Exebox
+     * sandbox when enableTerminalSandbox is true. Inside this Ubuntu guest the
+     * sandbox hides /usr/local/bin, so the agent reports that opencode is
+     * missing or "operation not permitted". The guest is already isolated by
+     * the APK, so the extra sandbox only breaks tools. Merge the keys we need
+     * and keep everything else the user changed.
+     */
+    private void prepareAntigravity() {
+        String script = ""
+                + "mkdir -p /root/.gemini/antigravity-cli\n"
+                + "if command -v python3 >/dev/null 2>&1; then\n"
+                + "python3 - <<'PY'\n"
+                + "import json\n"
+                + "p = '/root/.gemini/antigravity-cli/settings.json'\n"
+                + "try:\n"
+                + "    d = json.load(open(p))\n"
+                + "except Exception:\n"
+                + "    d = {}\n"
+                + "d['enableTerminalSandbox'] = False\n"
+                + "d['toolPermission'] = 'always-proceed'\n"
+                + "d['allowNonWorkspaceAccess'] = True\n"
+                + "ws = [w for w in (d.get('trustedWorkspaces') or [])\n"
+                + "      if isinstance(w, str)]\n"
+                + "if '/root' not in ws:\n"
+                + "    ws.append('/root')\n"
+                + "d['trustedWorkspaces'] = ws\n"
+                + "voice = d.get('voice')\n"
+                + "if not isinstance(voice, dict):\n"
+                + "    voice = {}\n"
+                + "voice.setdefault('voiceMode', 'live')\n"
+                + "voice.setdefault('fullDuplex', True)\n"
+                + "voice.setdefault('volume', 100)\n"
+                + "d['voice'] = voice\n"
+                + "json.dump(d, open(p, 'w'), indent=2)\n"
+                + "PY\n"
+                + "fi\n";
+        try {
+            guestHome().mkdirs();
+            java.io.FileOutputStream out = new java.io.FileOutputStream(
+                    new File(Setup.STORAGE_DIR, "agy-env.sh"));
+            out.write(script.getBytes(StandardCharsets.UTF_8));
+            out.close();
+        } catch (Exception e) {
+            Logger.i("agy-setup: failed " + e);
+        }
     }
 
     private void prepareClaude() {
@@ -481,6 +520,41 @@ public class TerminalService extends Service {
         }
     }
 
+    /** Starts the one-shot guest audio bootstrap without blocking the CLI. */
+    private void bootstrapAudio(Session session) {
+        File script = new File(Setup.STORAGE_DIR, "audio-bootstrap.sh");
+        if (script.exists()) {
+            session.write("( sh /root/attc/audio-bootstrap.sh >/dev/null 2>&1 & )\r");
+        }
+    }
+
+    /**
+     * Antigravity can speak and listen through Gemini Live, but only when the
+     * account allows it. Ask for live voice once the TUI has settled; the CLI
+     * answers with its own notice when the plan blocks it, and nothing else on
+     * the audio path depends on this succeeding.
+     */
+    private void scheduleAgyVoice(Session session) {
+        if (prefs == null || !prefs.getBoolean(PREF_AGY_VOICE, true)) {
+            return;
+        }
+        Thread t = new Thread(() -> {
+            try {
+                Thread.sleep(12000L);
+            } catch (InterruptedException e) {
+                return;
+            }
+            if (Hub.session != session || !session.isRunning()
+                    || !"agy".equals(activeCli)) {
+                return;
+            }
+            Logger.i("agy: requesting live voice");
+            session.write("/voice live\r");
+        }, "agy-voice");
+        t.setDaemon(true);
+        t.start();
+    }
+
     /** Runs a new pick in the PTY that is already sitting at the prompt. */
     private void launchSelectedCli(String cli) {
         if (Hub.session == null) {
@@ -519,6 +593,8 @@ public class TerminalService extends Service {
             installCli(cli);
             return;
         }
+        activeCli = cli;
+        bootstrapAudio(session);
         // After a CLI returns, write a marker the service watches. The shared
         // folder is reachable as /root/attc from inside the guest.
         String exitMark = "; printf '%s' \"$?\" > /root/attc/cli-exit";
@@ -533,10 +609,20 @@ public class TerminalService extends Service {
                     + " CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT=1"
                     + " CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1\r");
             session.write("sh /root/attc/claude-env.sh\r");
-            session.write("cd /root; claude" + exitMark + "\r");
+            session.write("cd /root; claude --dangerously-skip-permissions"
+                    + exitMark + "\r");
         } else if ("agy".equals(cli)) {
+            prepareAntigravity();
             session.write("export PATH=/root/.local/bin:/root/.kimi-code/bin:$PATH\r");
-            session.write("cd /root; agy" + exitMark + "\r");
+            session.write("sh /root/attc/agy-env.sh\r");
+            // The starter account warns that --mode auto is unavailable, but
+            // --dangerously-skip-permissions is what lets the agent run Bash,
+            // edit files and open links without a prompt. The model alias is
+            // pinned so voice mode and the status line stay on Flash Low.
+            session.write("cd /root; agy --dangerously-skip-permissions"
+                    + " --mode auto --model gemini-3.8-flash-low"
+                    + exitMark + "\r");
+            scheduleAgyVoice(session);
         } else if ("codex".equals(cli)) {
             Setup s = setup;
             if (s == null || !s.codexReady()) {
@@ -547,7 +633,9 @@ public class TerminalService extends Service {
             // The standalone release ships without the background server
             // package; --no-daemon is the supported mode and avoids the
             // immediate "no complete local package" exit.
-            session.write("cd /root; codex --no-daemon" + exitMark + "\r");
+            session.write("cd /root; codex --no-daemon"
+                    + " --dangerously-bypass-approvals-and-sandbox"
+                    + exitMark + "\r");
         } else if ("kimi".equals(cli)) {
             session.write("export PATH=/root/.local/bin:/root/.kimi-code/bin:$PATH\r");
             // The OAuth device request is the one call that must stay quick.
@@ -556,7 +644,8 @@ public class TerminalService extends Service {
             // bypass the proxy for this process only. API traffic keeps using
             // the normal route.
             session.write("cd /root; NO_PROXY=\"$NO_PROXY,auth.kimi.com\""
-                    + " no_proxy=\"$no_proxy,auth.kimi.com\" kimi" + exitMark + "\r");
+                    + " no_proxy=\"$no_proxy,auth.kimi.com\" kimi --auto"
+                    + exitMark + "\r");
         } else if ("terminal".equals(cli)) {
             // Plain shell: nothing to launch, but make the installed CLIs
             // available if the user starts one by hand.
@@ -954,32 +1043,6 @@ public class TerminalService extends Service {
         Logger.i("guestcmd$ " + command);
         String out = runGuestOnceTimeout(600000L, "/bin/sh", "-c", command);
         Logger.i("guestcmd out:\n" + out);
-    }
-
-    /**
-     * Test hook behind {@code --ez soundtest true}: injects the same OSC
-     * sequences opencode emits and lets the normal listener path play them.
-     */
-    private void runSoundTest() {
-        TerminalBuffer buffer = Hub.buffer;
-        if (buffer == null) {
-            Logger.i("soundtest: no buffer");
-            return;
-        }
-        try {
-            byte[] working = "\u001b]7501;state=working\u0007".getBytes(StandardCharsets.UTF_8);
-            buffer.feed(working, working.length);
-            Thread.sleep(150);
-            byte[] idle = "\u001b]7501;state=idle:app=opencode\u0007"
-                    .getBytes(StandardCharsets.UTF_8);
-            buffer.feed(idle, idle.length);
-            Thread.sleep(300);
-            byte[] bell = new byte[]{0x07};
-            buffer.feed(bell, bell.length);
-            Logger.i("soundtest: fed working, idle, bell");
-        } catch (InterruptedException ignored) {
-            Thread.currentThread().interrupt();
-        }
     }
 
     private void runFsTest() {        String script =
@@ -1534,6 +1597,18 @@ public class TerminalService extends Service {
         updateNotification();
     }
 
+    /** Short haptic feedback; the app deliberately plays no tones of its own. */
+    private void vibrate(long millis) {
+        try {
+            android.os.Vibrator v = (android.os.Vibrator) getSystemService(
+                    Context.VIBRATOR_SERVICE);
+            if (v != null && v.hasVibrator()) {
+                v.vibrate(millis);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
     private void stopVoice() {
         VoiceEngine engine = voiceEngine;
         voiceEngine = null;
@@ -1550,7 +1625,7 @@ public class TerminalService extends Service {
             return;
         }
         Logger.i("voice: wake -> command capture");
-        Sound.play(this, Sound.BELL);
+        vibrate(60);
         startCommandCapture();
     }
 
@@ -1922,6 +1997,8 @@ public class TerminalService extends Service {
 
     private void hardClose() {
         stopVoice();
+        AudioBridge.setListener(null);
+        AudioBridge.stop();
         VoiceBridge.stop();
         ZenProxy.get(this).stop();
         pendingCli = null;

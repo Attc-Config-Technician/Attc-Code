@@ -3,6 +3,36 @@
 All notable changes to Attc Code are documented here. Versions follow the
 `versionName` shipped in the APK; `versionCode` is in parentheses.
 
+## 5.19.0 (88) — 2026-11-20
+
+- **The terminal's own audio reaches the phone.** `AudioBridge` runs two
+  loopback PCM servers (playback on 4714, capture on 4715) and `VoiceBridge`
+  installs `arecord`, `pw-record`, `parec`, `paplay`, `pw-cat` and `aplay`
+  shims in Ubuntu. A CLI's original sounds play on the speaker, and its
+  microphone gets the phone microphone. The app synthesizes no voice and no
+  notification tones of its own.
+- **One-shot audio bootstrap.** On the first CLI launch the guest installs
+  `python3-minimal`, `alsa-utils` and `pulseaudio-utils` in the background,
+  guarded by a marker, so the shims work on a fresh root filesystem.
+- **Antigravity auto voice.** A new Advanced option sends `/voice live` about
+  12 seconds after Antigravity starts. When the account includes Gemini Live
+  this opens the live audio session; otherwise Antigravity prints its own
+  notice and the wake-word path keeps typing requests into the CLI.
+- **Antigravity setup is automatic.** Terminal sandboxing is disabled,
+  `toolPermission` is set to always proceed and `/root` is trusted before
+  launch, so `which`, `opencode --version` and other shell tools work without
+  manual approval.
+- **Wake-word enrollment dialog.** Three guided samples with a live level
+  meter, sample counter, vibration, cancel and a clear error message.
+- **SHIFT on the key row.** SHIFT works like CTRL and ALT: sticky until the
+  next key, with refreshed modifier colours and capitalised letters.
+- **Shorter Settings.** The main screen keeps everyday switches and an
+  `Advanced…` page holds the wake phrase, voice CLI, Antigravity voice toggle,
+  device identity, network tools and diagnostics. `Forget wake word` clears a
+  model recorded in a noisy room.
+- `VIBRATE` permission, README notes for the audio path and the new Settings
+  layout.
+
 ## 5.18.2 (87) — 2026-11-16
 
 - **Self-healing CLI install.** Launching Claude Code, Kimi Code or

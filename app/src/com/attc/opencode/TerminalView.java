@@ -44,6 +44,8 @@ public final class TerminalView extends View implements Hub.Listener {
     private boolean pinching;
     private boolean ctrlArmed;
     private boolean altArmed;
+    private boolean shiftArmed;
+    private Runnable modifierListener;
 
     // A pinch fires dozens of onScale callbacks. Reflowing the grid and
     // sending SIGWINCH on every one makes a TUI render at a stale size, which
@@ -709,6 +711,8 @@ public final class TerminalView extends View implements Hub.Listener {
         }
         ctrlArmed = false;
         altArmed = false;
+        shiftArmed = false;
+        notifyModifiers();
     }
 
     public void setCtrl(boolean on) {
@@ -719,6 +723,10 @@ public final class TerminalView extends View implements Hub.Listener {
         altArmed = on;
     }
 
+    public void setShift(boolean on) {
+        shiftArmed = on;
+    }
+
     public boolean ctrlArmed() {
         return ctrlArmed;
     }
@@ -727,20 +735,39 @@ public final class TerminalView extends View implements Hub.Listener {
         return altArmed;
     }
 
-    /** Applies sticky CTRL/ALT to the next text committed by the IME. */
+    public boolean shiftArmed() {
+        return shiftArmed;
+    }
+
+    /** Lets the activity repaint the extra-keys bar after a sticky modifier ends. */
+    public void setModifierListener(Runnable listener) {
+        modifierListener = listener;
+    }
+
+    private void notifyModifiers() {
+        Runnable listener = modifierListener;
+        if (listener != null) {
+            listener.run();
+        }
+    }
+
+    /** Applies sticky CTRL/ALT/SHIFT to the next text committed by the IME. */
     String applyModifiers(String text) {
-        if (!ctrlArmed && !altArmed) {
+        if (!ctrlArmed && !altArmed && !shiftArmed) {
             return text;
         }
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
             char out = c;
+            if (shiftArmed) {
+                out = Character.toUpperCase(out);
+            }
             if (ctrlArmed) {
-                char lower = Character.toLowerCase(c);
+                char lower = Character.toLowerCase(out);
                 if (lower >= 'a' && lower <= 'z') {
                     out = (char) (lower & 0x1f);
-                } else if (c == ' ') {
+                } else if (out == ' ') {
                     out = 0;
                 }
             }
@@ -751,6 +778,8 @@ public final class TerminalView extends View implements Hub.Listener {
         }
         ctrlArmed = false;
         altArmed = false;
+        shiftArmed = false;
+        notifyModifiers();
         return sb.toString();
     }
 

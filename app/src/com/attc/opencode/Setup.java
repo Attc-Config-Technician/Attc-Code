@@ -599,11 +599,10 @@ public final class Setup {
 
     /** DNS, hosts and a CA bundle so apt/curl/opencode TLS work inside Ubuntu. */
     /**
-     * Routes ALSA to the built-in null device. opencode's TUI audio engine can
-     * only see the proot rootfs, not Android's audio HAL, and without a device
-     * it floods the terminal with ALSA errors on every attention sound. The
-     * null PCM accepts playback silently; the Android side plays the tones
-     * from OSC 7501 and BEL (see Sound.java).
+     * Routes ALSA to the built-in null device so tools that ignore the PATH
+     * shims fail silently instead of flooding the terminal with ALSA errors.
+     * Playback and recording normally go through the audio shims in
+     * VoiceBridge, which forward PCM to AudioBridge over localhost.
      */
     private void writeAsoundConfig(File etc) {
         String conf = "pcm.!default {\n"

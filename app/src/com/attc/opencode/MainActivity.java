@@ -12,6 +12,7 @@ import android.content.pm.PackageManager;
 import android.Manifest;
 import android.database.Cursor;
 import android.graphics.Color;
+import android.graphics.PorterDuff;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
@@ -23,6 +24,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.os.PowerManager;
+import android.os.Vibrator;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
@@ -44,6 +46,7 @@ import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -97,6 +100,7 @@ public final class MainActivity extends Activity implements Hub.Listener {
     private Button retry;
     private TextView ctrlKey;
     private TextView altKey;
+    private TextView shiftKey;
     private FrameLayout stage;
     private LinearLayout selectionBar;
     private LinearLayout textInputRow;
@@ -177,6 +181,7 @@ public final class MainActivity extends Activity implements Hub.Listener {
         root.addView(stage, stageParams);
 
         terminal = new TerminalView(this);
+        terminal.setModifierListener(this::paintModifiers);
         int pad = dp(10);
         terminal.setPadding(pad, dp(8), pad, dp(8));
         stage.addView(terminal, new FrameLayout.LayoutParams(
@@ -424,7 +429,8 @@ public final class MainActivity extends Activity implements Hub.Listener {
         // use arrow glyphs so they read as arrows on the phone.
         String[][] rows = {
                 {"ESC", "/", "-", "HOME", "\u25B2", "END", "PGUP"},
-                {"TAB", "CTRL", "ALT", "\u25C0", "\u25BC", "\u25B6", "PGDN"}
+                {"TAB", "SHIFT", "CTRL", "ALT", "\u25C0", "\u25BC", "\u25B6",
+                        "PGDN"}
         };
         for (String[] labels : rows) {
             LinearLayout row = new LinearLayout(this);
@@ -456,7 +462,13 @@ public final class MainActivity extends Activity implements Hub.Listener {
         lp.setMargins(dp(2), dp(2), dp(2), dp(2));
         b.setLayoutParams(lp);
 
-        if ("CTRL".equals(label)) {
+        if ("SHIFT".equals(label)) {
+            shiftKey = b;
+            b.setOnClickListener(v -> {
+                terminal.setShift(!terminal.shiftArmed());
+                paintModifiers();
+            });
+        } else if ("CTRL".equals(label)) {
             ctrlKey = b;
             b.setOnClickListener(v -> {
                 terminal.setCtrl(!terminal.ctrlArmed());
@@ -545,6 +557,9 @@ public final class MainActivity extends Activity implements Hub.Listener {
     }
 
     private void paintModifiers() {
+        if (shiftKey != null) {
+            shiftKey.setTextColor(terminal.shiftArmed() ? 0xFF00E5A0 : 0xFF9FB0BF);
+        }
         if (ctrlKey != null) {
             ctrlKey.setTextColor(terminal.ctrlArmed() ? 0xFF00E5A0 : 0xFF9FB0BF);
         }
@@ -734,7 +749,9 @@ public final class MainActivity extends Activity implements Hub.Listener {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         int pad = dp(20);
-        box.setPadding(pad, dp(12), pad, dp(4));
+        box.setPadding(pad, dp(8), pad, dp(4));
+
+        section(box, "Terminal");
 
         CheckBox boot = new CheckBox(this);
         boot.setText("Start terminal on boot");
@@ -754,12 +771,15 @@ public final class MainActivity extends Activity implements Hub.Listener {
                                 : TerminalService.ACTION_DISABLE_AWAKE)));
         box.addView(awake);
 
-        TextView voiceTitle = new TextView(this);
-        voiceTitle.setText("Voice assistant (" + VoiceEngine.phrase(this) + ")");
-        voiceTitle.setTextColor(0xFFE6EDF3);
-        voiceTitle.setTypeface(Typeface.DEFAULT_BOLD);
-        voiceTitle.setPadding(0, dp(16), 0, 0);
-        box.addView(voiceTitle);
+        box.addView(item("Restart terminal", v -> {
+            startService(new Intent(this, TerminalService.class)
+                    .setAction(TerminalService.ACTION_RESTART));
+        }));
+        box.addView(item("Fully close app", v ->
+                startService(new Intent(this, TerminalService.class)
+                        .setAction(TerminalService.ACTION_CLOSE))));
+
+        section(box, "Voice assistant (" + VoiceEngine.phrase(this) + ")");
 
         voiceToggle = new CheckBox(this);
         voiceToggle.setText("Listen for \"" + VoiceEngine.phrase(this) + "\"");
@@ -777,72 +797,22 @@ public final class MainActivity extends Activity implements Hub.Listener {
         });
         box.addView(voiceToggle);
 
-        TextView voiceNote = new TextView(this);
-        voiceNote.setText("Records a personal, offline wake word model from three "
-                + "samples. While enabled, a microphone foreground service listens "
-                + "even with the screen off. The recognised sentence is typed into "
-                + "the selected CLI, which keeps its current model. Speech to text "
-                + "uses the phone's recognition service, so it may go online.");
-        voiceNote.setTextColor(0xFF7D8B99);
-        voiceNote.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
-        box.addView(voiceNote);
+        note(box, "Private, offline wake word from three samples. The recognised "
+                + "sentence is typed into the selected CLI; speech to text may use "
+                + "the phone's recognition service.");
 
         if (!VoiceEngine.hasPermission(this)) {
             box.addView(item("Grant microphone permission",
                     v -> requestVoicePermission()));
         }
 
-        box.addView(item("Wake phrase: " + VoiceEngine.phrase(this),
-                v -> chooseWakePhrase(voiceToggle)));
-        box.addView(item("Voice CLI: " + voiceCliLabel(), v -> chooseVoiceCli()));
         box.addView(item("Record \"" + VoiceEngine.phrase(this) + "\" again",
                 v -> recordWakeWord(voiceToggle)));
-        box.addView(item("Battery optimization exemption",
-                v -> requestBatteryExemption()));
         box.addView(item("Test wake now", v ->
                 sendService(new Intent(this, TerminalService.class)
                         .setAction(TerminalService.ACTION_VOICE_WAKE_TEST))));
 
-        CheckBox shield = new CheckBox(this);
-        shield.setText("Private device identity");
-        shield.setTextColor(0xFFE6EDF3);
-        shield.setChecked(Privacy.enabled(this));
-        shield.setOnCheckedChangeListener((v, checked) -> {
-            Privacy.setEnabled(this, checked);
-            Privacy.apply(this, new Setup(this).rootDir());
-            startService(new Intent(this, TerminalService.class)
-                    .setAction(TerminalService.ACTION_PRIVACY));
-        });
-        box.addView(shield);
-
-        TextView note = new TextView(this);
-        note.setText("Rotates the machine-id, hostname and MAC every 30 minutes, so "
-                + "programs inside Ubuntu see a synthetic identity. The public IP "
-                + "cannot be changed by the app: use a VPN or proxy for that.");
-        note.setTextColor(0xFF7D8B99);
-        note.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
-        box.addView(note);
-
-        CheckBox sounds = new CheckBox(this);
-        sounds.setText("Attention sounds");
-        sounds.setTextColor(0xFFE6EDF3);
-        sounds.setChecked(prefs.getBoolean(Sound.KEY, true));
-        sounds.setOnCheckedChangeListener((v, checked) ->
-                prefs.edit().putBoolean(Sound.KEY, checked).apply());
-        box.addView(sounds);
-
-        TextView soundsNote = new TextView(this);
-        soundsNote.setText("Beeps when opencode finishes a task or waits for you.");
-        soundsNote.setTextColor(0xFF7D8B99);
-        soundsNote.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
-        box.addView(soundsNote);
-
-        TextView vpnTitle = new TextView(this);
-        vpnTitle.setText("Fake IP");
-        vpnTitle.setTextColor(0xFFE6EDF3);
-        vpnTitle.setTypeface(Typeface.DEFAULT_BOLD);
-        vpnTitle.setPadding(0, dp(16), 0, 0);
-        box.addView(vpnTitle);
+        section(box, "Network");
 
         fakeVpnToggle = new CheckBox(this);
         fakeVpnToggle.setText("Fake IP in Ubuntu (no system VPN)");
@@ -860,31 +830,78 @@ public final class MainActivity extends Activity implements Hub.Listener {
         });
         box.addView(fakeVpnToggle);
 
-        TextView simulated = new TextView(this);
-        fakeVpnIpText = simulated;
-        simulated.setText(fakeVpnStatusText());
-        simulated.setTextColor(0xFF7D8B99);
-        simulated.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-        box.addView(simulated);
+        fakeVpnIpText = new TextView(this);
+        fakeVpnIpText.setText(fakeVpnStatusText());
+        fakeVpnIpText.setTextColor(0xFF7D8B99);
+        fakeVpnIpText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        box.addView(fakeVpnIpText);
 
-        box.addView(item("Reset quota", v -> {
-            QuotaReset.trigger(this, "manual");
-            Toast.makeText(this, "Quota reset started: new opencode server address",
-                    Toast.LENGTH_SHORT).show();
-        }));
+        box.addView(item("Advanced…", v -> showAdvancedSettings()));
 
-        TextView vpnNote = new TextView(this);
-        vpnNote.setText("Runs without taking the system VPN slot, so a real "
-                + "VPN keeps working. "
-                + "A new simulated IP every 30 minutes while active. "
-                + "Every IP-check host is answered inside Ubuntu (HTTPS included) by "
-                + "the local proxy, so no program in the guest can learn the real "
-                + "address. Servers you talk to still see the exit below; set an "
-                + "upstream proxy to change it.");
-        vpnNote.setTextColor(0xFF7D8B99);
-        vpnNote.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
-        box.addView(vpnNote);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(box);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Settings")
+                .setView(scroll)
+                .setNegativeButton("Close", null)
+                .create();
+        dialog.show();
+    }
 
+    /** Rarely used tools live behind one more tap, so Settings stays short. */
+    private void showAdvancedSettings() {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int pad = dp(20);
+        box.setPadding(pad, dp(8), pad, dp(4));
+
+        section(box, "Voice & privacy");
+
+        box.addView(item("Wake phrase: " + VoiceEngine.phrase(this),
+                v -> chooseWakePhrase(voiceToggle)));
+        box.addView(item("Voice CLI: " + voiceCliLabel(), v -> chooseVoiceCli()));
+        note(box, "Antigravity live voice needs a plan with Gemini Live. If "
+                + "/voice live says live mode is unavailable, the wake word still "
+                + "types your request into the CLI, and the audio bridge carries "
+                + "any sound the CLI itself plays.");
+        CheckBox agyVoice = new CheckBox(this);
+        agyVoice.setText("Antigravity voice on launch");
+        agyVoice.setTextColor(0xFFE6EDF3);
+        agyVoice.setChecked(prefs.getBoolean(TerminalService.PREF_AGY_VOICE, true));
+        agyVoice.setOnCheckedChangeListener((v, checked) ->
+                prefs.edit().putBoolean(TerminalService.PREF_AGY_VOICE, checked).apply());
+        box.addView(agyVoice);
+        note(box, "Sends /voice live about 12 seconds after Antigravity starts. "
+                + "It is ignored when the account does not include Gemini Live.");
+
+        box.addView(item("Forget wake word", v -> forgetWakeWord()));
+        box.addView(item("Battery optimization exemption",
+                v -> requestBatteryExemption()));
+
+        CheckBox shield = new CheckBox(this);
+        shield.setText("Private device identity");
+        shield.setTextColor(0xFFE6EDF3);
+        shield.setChecked(Privacy.enabled(this));
+        shield.setOnCheckedChangeListener((v, checked) -> {
+            Privacy.setEnabled(this, checked);
+            Privacy.apply(this, new Setup(this).rootDir());
+            startService(new Intent(this, TerminalService.class)
+                    .setAction(TerminalService.ACTION_PRIVACY));
+        });
+        box.addView(shield);
+        note(box, "Rotates machine-id, hostname and MAC every 30 minutes. The "
+                + "public IP needs a VPN or proxy.");
+
+        section(box, "Network tools");
+
+        box.addView(item("Exit network: " + Egress.mode(this),
+                v -> showEgressDialog()));
+        box.addView(item("New IP now (rotate exit)", v -> rotateEgress()));
+        box.addView(item("New IP + new fingerprint",
+                v -> rotateNetworkWithFingerprint()));
+        box.addView(item("Upstream proxy: " + upstreamLabel(),
+                v -> showUpstreamDialog()));
+        box.addView(item("Check exit IP (what servers see)", v -> checkExitIp()));
         box.addView(item("Change simulated IP now", v -> {
             if (VpnState.isRunning()) {
                 try {
@@ -893,8 +910,6 @@ public final class MainActivity extends Activity implements Hub.Listener {
                 } catch (Exception ignored) {
                 }
                 if (fakeVpnIpText != null) {
-                    // The service rotates on the same main thread; refresh the
-                    // label right after it has handled the command.
                     fakeVpnIpText.postDelayed(() -> {
                         if (fakeVpnIpText != null) {
                             fakeVpnIpText.setText(fakeVpnStatusText());
@@ -908,7 +923,6 @@ public final class MainActivity extends Activity implements Hub.Listener {
                 }
             }
         }));
-
         box.addView(item("Run guest IP check", v -> {
             if (fakeVpnIpText != null) {
                 fakeVpnIpText.setText("Guest check: running…");
@@ -922,13 +936,16 @@ public final class MainActivity extends Activity implements Hub.Listener {
                 }, 9000);
             }
         }));
-        box.addView(item("Exit network: " + Egress.mode(this), v -> showEgressDialog()));
-        box.addView(item("New IP now (rotate exit)", v -> rotateEgress()));
-        box.addView(item("New IP + new fingerprint", v -> rotateNetworkWithFingerprint()));
-        box.addView(item("Upstream proxy: " + upstreamLabel(), v -> showUpstreamDialog()));
-        box.addView(item("Check exit IP (what servers see)", v -> checkExitIp()));
+        box.addView(item("Reset quota", v -> {
+            QuotaReset.trigger(this, "manual");
+            Toast.makeText(this, "Quota reset started: new opencode server address",
+                    Toast.LENGTH_SHORT).show();
+        }));
         box.addView(item("Rotate identity now", v ->
                 Privacy.apply(this, new Setup(this).rootDir())));
+
+        section(box, "System");
+
         box.addView(item("Update opencode now", v ->
                 startService(new Intent(this, TerminalService.class)
                         .setAction(TerminalService.ACTION_UPDATE))));
@@ -941,23 +958,48 @@ public final class MainActivity extends Activity implements Hub.Listener {
         });
         box.addView(shizukuRow);
         box.addView(item("All files access", v -> openStorageSettings()));
-        box.addView(item("Restart terminal", v -> {
-            Intent i = new Intent(this, TerminalService.class)
-                    .setAction(TerminalService.ACTION_RESTART);
-            startService(i);
-        }));
-        box.addView(item("Fully close app", v ->
-                startService(new Intent(this, TerminalService.class)
-                        .setAction(TerminalService.ACTION_CLOSE))));
 
         ScrollView scroll = new ScrollView(this);
         scroll.addView(box);
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("Settings")
+        new AlertDialog.Builder(this)
+                .setTitle("Advanced")
                 .setView(scroll)
                 .setNegativeButton("Close", null)
-                .create();
-        dialog.show();
+                .show();
+    }
+
+    private void forgetWakeWord() {
+        new AlertDialog.Builder(this)
+                .setTitle("Forget wake word")
+                .setMessage("Removes the three stored samples and turns listening "
+                        + "off. Record again when you are ready.")
+                .setPositiveButton("Forget", (d, w) -> {
+                    VoiceEngine.clearTemplates(this);
+                    setVoiceEnabled(false);
+                    restoreVoiceToggle(voiceToggle, false);
+                    Toast.makeText(this, "Wake word removed",
+                            Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void section(LinearLayout box, String title) {
+        TextView view = new TextView(this);
+        view.setText(title);
+        view.setTextColor(0xFFE6EDF3);
+        view.setTypeface(Typeface.DEFAULT_BOLD);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        view.setPadding(0, dp(18), 0, dp(2));
+        box.addView(view);
+    }
+
+    private void note(LinearLayout box, String text) {
+        TextView view = new TextView(this);
+        view.setText(text);
+        view.setTextColor(0xFF7D8B99);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        box.addView(view);
     }
 
     // ------------------------------------------------------------- voice setup
@@ -1029,61 +1071,145 @@ public final class MainActivity extends Activity implements Hub.Listener {
 
     private void recordWakeWord(final CheckBox box) {
         final String phrase = VoiceEngine.phrase(this);
-        new AlertDialog.Builder(this)
-                .setTitle("Record \"" + phrase + "\"")
-                .setMessage("Find a quiet spot and hold the phone close. Say "
-                        + "\"" + phrase + "\" clearly three times, with a short pause "
-                        + "between each one. The model stays on this phone.")
-                .setPositiveButton("Start", (d, w) -> {
-                    suppressVoiceToggle = true;
-                    if (box != null) {
-                        box.setChecked(false);
-                    }
-                    suppressVoiceToggle = false;
-                    setVoiceEnabled(false);
-                    uiHandler.postDelayed(() -> VoiceEngine.enroll(this,
-                            new VoiceEngine.EnrollListener() {
-                                @Override
-                                public void onProgress(int done) {
-                                    Logger.i("voice: enrol progress " + done + "/3");
-                                    Toast.makeText(MainActivity.this,
-                                            done + "/3 recorded", Toast.LENGTH_SHORT).show();
-                                }
+        final LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        int pad = dp(20);
+        content.setPadding(pad, dp(10), pad, dp(2));
 
-                                @Override
-                                public void onDone(boolean ok, String message) {
-                                    Logger.i("voice: enrol done ok=" + ok + " " + message);
-                                    if (ok) {
-                                        setVoiceEnabled(true);
-                                        suppressVoiceToggle = true;
-                                        if (box != null) {
-                                            box.setChecked(true);
-                                        }
-                                        suppressVoiceToggle = false;
-                                        Toast.makeText(MainActivity.this,
-                                                phrase + " is ready",
-                                                Toast.LENGTH_LONG).show();
-                                    } else {
-                                        suppressVoiceToggle = true;
-                                        if (box != null) {
-                                            box.setChecked(false);
-                                        }
-                                        suppressVoiceToggle = false;
-                                        Toast.makeText(MainActivity.this,
-                                                "Recording failed: " + message,
-                                                Toast.LENGTH_LONG).show();
-                                    }
-                                }
-                            }), 700L);
-                })
-                .setNegativeButton("Cancel", (d, w) -> {
-                    suppressVoiceToggle = true;
-                    if (box != null) {
-                        box.setChecked(false);
+        final TextView step = new TextView(this);
+        step.setText("Sample 1 of 3");
+        step.setTextColor(0xFFE6EDF3);
+        step.setTypeface(Typeface.DEFAULT_BOLD);
+        step.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        content.addView(step);
+
+        final TextView hint = new TextView(this);
+        hint.setText("Say \"" + phrase + "\" clearly, then pause. The meter "
+                + "shows what the microphone hears.");
+        hint.setTextColor(0xFF7D8B99);
+        hint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        hint.setPadding(0, dp(4), 0, dp(12));
+        content.addView(hint);
+
+        final ProgressBar meter = new ProgressBar(this, null,
+                android.R.attr.progressBarStyleHorizontal);
+        meter.setMax(100);
+        meter.setProgress(0);
+        if (meter.getProgressDrawable() != null) {
+            meter.getProgressDrawable().setColorFilter(0xFF00E5A0,
+                    PorterDuff.Mode.SRC_IN);
+        }
+        content.addView(meter, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(10)));
+
+        final TextView status = new TextView(this);
+        status.setText("Starting the microphone…");
+        status.setTextColor(0xFF7D8B99);
+        status.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        status.setPadding(0, dp(8), 0, 0);
+        content.addView(status);
+
+        final AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Record \"" + phrase + "\"")
+                .setView(content)
+                .setNegativeButton("Cancel", null)
+                .setCancelable(false)
+                .create();
+
+        final boolean[] running = {false};
+        final boolean[] cancelled = {false};
+        final boolean[] finished = {false};
+
+        dialog.setOnShowListener(d -> {
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v -> {
+                cancelled[0] = true;
+                if (running[0]) {
+                    VoiceEngine.cancelEnroll();
+                }
+                dialog.dismiss();
+                if (!finished[0]) {
+                    restoreVoiceToggle(box, false);
+                }
+            });
+            uiHandler.postDelayed(() -> {
+                if (cancelled[0] || isFinishing()) {
+                    return;
+                }
+                running[0] = true;
+                restoreVoiceToggle(box, false);
+                setVoiceEnabled(false);
+                status.setText("Listening…");
+                VoiceEngine.enroll(this, new VoiceEngine.EnrollListener() {
+                    @Override
+                    public void onProgress(int done) {
+                        Logger.i("voice: enrol progress " + done + "/3");
+                        if (finished[0]) {
+                            return;
+                        }
+                        if (done < 3) {
+                            step.setText("Sample " + (done + 1) + " of 3");
+                            status.setText("Captured " + done + " of 3. Say \""
+                                    + phrase + "\" again.");
+                        } else {
+                            step.setText("All 3 samples captured");
+                            status.setText("Saving the private model…");
+                        }
+                        vibrate(70);
                     }
-                    suppressVoiceToggle = false;
-                })
-                .show();
+
+                    @Override
+                    public void onLevel(float level) {
+                        if (!finished[0]) {
+                            meter.setProgress(Math.round(level * 100f));
+                        }
+                    }
+
+                    @Override
+                    public void onDone(boolean ok, String message) {
+                        running[0] = false;
+                        finished[0] = true;
+                        Logger.i("voice: enrol done ok=" + ok + " " + message);
+                        if (cancelled[0]) {
+                            return;
+                        }
+                        if (ok) {
+                            dialog.dismiss();
+                            setVoiceEnabled(true);
+                            restoreVoiceToggle(box, true);
+                            vibrate(120);
+                            Toast.makeText(MainActivity.this,
+                                    phrase + " is ready", Toast.LENGTH_LONG).show();
+                        } else {
+                            step.setText("Recording failed");
+                            status.setText(message);
+                            meter.setProgress(0);
+                            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
+                                    .setText("Close");
+                        }
+                    }
+                });
+            }, 900L);
+        });
+        dialog.show();
+    }
+
+    private void restoreVoiceToggle(CheckBox box, boolean checked) {
+        suppressVoiceToggle = true;
+        if (box != null) {
+            box.setChecked(checked);
+        }
+        suppressVoiceToggle = false;
+    }
+
+    private void vibrate(long millis) {
+        try {
+            Vibrator vibrator = (Vibrator) getSystemService(
+                    Context.VIBRATOR_SERVICE);
+            if (vibrator != null && vibrator.hasVibrator()) {
+                vibrator.vibrate(millis);
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     /**
@@ -1599,10 +1725,6 @@ public final class MainActivity extends Activity implements Hub.Listener {
         if (intent != null && intent.getBooleanExtra("fstest", false)) {
             startService(new Intent(this, TerminalService.class)
                     .setAction(TerminalService.ACTION_FS_TEST));
-        }
-        if (intent != null && intent.getBooleanExtra("soundtest", false)) {
-            startService(new Intent(this, TerminalService.class)
-                    .setAction(TerminalService.ACTION_SOUND_TEST));
         }
         if (intent != null && intent.getStringExtra("guestcmd") != null) {
             startService(new Intent(this, TerminalService.class)

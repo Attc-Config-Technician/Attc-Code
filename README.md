@@ -67,9 +67,11 @@ Every cold start asks what you want to launch. Warm sessions keep their working 
 
 Say **“Hey Attc”** with the screen off. The wake word is matched locally with MFCC features and dynamic time warping, using a small model trained from your own recordings. Nothing about the wake word leaves the phone.
 
-The phrase is selectable in **Settings → Voice assistant**: presets such as “Hey Attc”, “Hey Attc Code”, “Merhaba Attc” and “Selam Attc”, or your own text. Changing the phrase asks you to record three new samples.
+The phrase is selectable in **Settings → Advanced → Wake phrase**: presets such as “Hey Attc”, “Hey Attc Code”, “Merhaba Attc” and “Selam Attc”, or your own text. Changing the phrase asks you to record three new samples.
 
 After the wake word, Android's speech recogniser turns Turkish speech into text and sends it to the selected CLI session. Voice is off by default and asks for microphone permission the first time you enable it.
+
+The app never synthesizes a voice of its own. `AudioBridge` installs `arecord`, `pw-record`, `parec`, `paplay`, `pw-cat` and `aplay` shims inside Ubuntu that stream raw PCM over loopback, so a CLI's own microphone and speaker (including Antigravity voice mode when your plan includes it) reach the phone hardware. A one-shot bootstrap installs `python3`, `alsa-utils` and `pulseaudio-utils` in Ubuntu on first launch.
 
 > Speech recognition may use the Google service on your device. Wake-word detection itself is fully offline.
 
@@ -94,6 +96,7 @@ After the wake word, Android's speech recogniser turns Turkish speech into text 
 - **Foreground service.** Sessions, notifications and wake locks are managed by an Android foreground service.
 - **VoiceEngine.** 16 kHz mono capture, 25 ms windows with 10 ms hop, FFT-512, 26 mel bands, 13 MFCCs, adaptive energy VAD and Sakoe-Chiba-banded DTW.
 - **VoiceBridge.** Watches a file queue under `/root/attc/ctl`, runs requests through the Shizuku shell and writes the result back.
+- **AudioBridge.** Two loopback servers (4714 play, 4715 record) move raw `s16le` PCM between guest audio tools and Android `AudioTrack`/`AudioRecord`; the wake engine yields the microphone while a CLI records.
 
 ## Limitations
 

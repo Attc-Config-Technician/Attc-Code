@@ -76,6 +76,10 @@ public final class VoiceEngine {
         /** Called with 1..3 as each good sample is stored. */
         void onProgress(int done);
 
+        /** Live input level, 0..1, so the screen can show the mic is alive. */
+        default void onLevel(float level) {
+        }
+
         /** Called once when recording finishes or fails. */
         void onDone(boolean ok, String message);
     }
@@ -275,6 +279,13 @@ public final class VoiceEngine {
      * The caller must stop the live engine first: Android gives the microphone
      * to one AudioRecord at a time.
      */
+    private static volatile boolean enrollCancelled;
+
+    /** Stops an enrolment that is already running; onDone reports cancelled. */
+    public static void cancelEnroll() {
+        enrollCancelled = true;
+    }
+
     public static void enroll(Context context, EnrollListener listener) {
         final Context app = context.getApplicationContext();
         final Handler main = MAIN;
@@ -282,6 +293,7 @@ public final class VoiceEngine {
             main.post(() -> listener.onDone(false, "microphone permission missing"));
             return;
         }
+        enrollCancelled = false;
         new Thread(() -> {
             AudioRecord r = open();
             if (r == null) {
@@ -299,14 +311,28 @@ public final class VoiceEngine {
                 Segmenter segmenter = new Segmenter();
                 long deadline = System.currentTimeMillis() + 60000L;
                 long nextLog = System.currentTimeMillis() + 2000L;
+                long nextLevel = 0L;
                 int readErrors = 0;
-                while (templates.size() < 3 && System.currentTimeMillis() < deadline) {
+                while (templates.size() < 3 && !enrollCancelled
+                        && System.currentTimeMillis() < deadline) {
                     int n = r.read(pcm, 0, pcm.length);
                     if (n <= 0) {
                         if (readErrors++ < 5) {
                             Logger.i("voice: enrolment read " + n);
                         }
                         continue;
+                    }
+                    long now = System.currentTimeMillis();
+                    if (now >= nextLevel) {
+                        nextLevel = now + 80L;
+                        double power = 0;
+                        for (int i = 0; i < n; i++) {
+                            double value = pcm[i] / 32768.0;
+                            power += value * value;
+                        }
+                        final float level = n == 0 ? 0f
+                                : (float) Math.min(1.0, Math.sqrt(power / n) * 5.0);
+                        main.post(() -> listener.onLevel(level));
                     }
                     for (int i = 0; i < n; i++) {
                         samples[count++] = pcm[i] / 32768.0;
@@ -337,6 +363,10 @@ public final class VoiceEngine {
                                 + " samples=" + templates.size());
                         nextLog += 2000L;
                     }
+                }
+                if (enrollCancelled) {
+                    main.post(() -> listener.onDone(false, "cancelled"));
+                    return;
                 }
                 if (templates.size() < 3) {
                     main.post(() -> listener.onDone(false,
