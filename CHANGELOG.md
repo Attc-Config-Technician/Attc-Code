@@ -16,9 +16,12 @@ All notable changes to Attc Code are documented here. Versions follow the
 - **Long replies are no longer cut in half.** `AudioBridge` asked
   `AudioTrack.write()` once per read and dropped the unwritten remainder, then
   stopped the track while audio was still queued. It now loops until every
-  byte is written, keeps about 200 ms buffered and waits for the playback head
-  before `stop()`. An 8-second test clip now reports `play done frames=192000`
-  instead of stopping after the first sentence.
+  byte is written, queues a full second of audio and waits for the playback
+  head before `stop()`. The guest `paplay`/`aplay` shim also forwards PCM in
+  8 KB blocks instead of 64 KB, so it no longer delivers 1.36 s bursts that
+  drained the queue and left an audible hole mid-sentence. An 8-second test
+  clip reports `play done frames=192000` instead of stopping after the first
+  sentence.
 - **Antigravity is the voice default.** With no explicit voice CLI configured,
   the wake word targets Antigravity instead of the last used CLI: it switches
   to a running `agy` session, resumes the one waiting at its prompt, or opens
@@ -31,6 +34,12 @@ All notable changes to Attc Code are documented here. Versions follow the
   echo cancellation via `VOICE_COMMUNICATION` and `AcousticEchoCanceler`.
   A recorded probe stays at exactly zero RMS during playback and keeps ambient
   sound before it, so the gate does not mute the user for good.
+- **The microphone is not held hostage by an open player.** The first echo
+  guard muted for as long as Antigravity kept its `paplay` socket open; a
+  single turn's player can live for minutes, so the CLI went deaf and the
+  next answer took over a minute. The gate now follows the queued audio:
+  it mutes while frames are waiting in the track, then releases 250 ms after
+  the last queued frame. A silent-but-open player no longer blocks speech.
 - Per-session `cli-exit-<id>` markers replace the shared marker, and restart,
   boot and fully-close paths release every PTY rather than just the visible
   one.

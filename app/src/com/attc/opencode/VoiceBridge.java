@@ -298,7 +298,7 @@ public final class VoiceBridge {
             + "    write_all(sock, (\"play %d %d s16le\\n\" % (rate, channels)).encode())\n"
             + "    total = 0\n"
             + "    while True:\n"
-            + "        block = source.read(65536)\n"
+            + "        block = source.read(8192)\n"
             + "        if not block:\n"
             + "            break\n"
             + "        write_all(sock, block)\n"

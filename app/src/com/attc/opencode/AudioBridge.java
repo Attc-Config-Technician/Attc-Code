@@ -48,9 +48,6 @@ public final class AudioBridge {
     private static ServerSocket playServer;
     private static ServerSocket recServer;
     private static Context appContext;
-    /** Number of playback clients currently sounding. */
-    private static final java.util.concurrent.atomic.AtomicInteger playClients =
-            new java.util.concurrent.atomic.AtomicInteger();
     /** Microphone stays muted until this moment, to swallow speaker reverb. */
     private static volatile long micMuteUntil;
 
@@ -166,9 +163,13 @@ public final class AudioBridge {
      * True while the speaker is (or was just) sounding. The phone microphone
      * sits next to the speaker; without this gate Antigravity transcribes its
      * own voice, treats it as a user turn and restarts the same sentence.
+     *
+     * This is deliberately tied to queued audio, not to the player socket:
+     * Antigravity keeps one paplay connection open for a whole turn, and
+     * muting for that long made the CLI deaf while the user was speaking.
      */
     private static boolean echoGuardActive() {
-        return playClients.get() > 0 || System.currentTimeMillis() < micMuteUntil;
+        return System.currentTimeMillis() < micMuteUntil;
     }
 
     private static void handlePlay(Socket client) {
@@ -188,15 +189,16 @@ public final class AudioBridge {
             int channelMask = channels == 2
                     ? AudioFormat.CHANNEL_OUT_STEREO
                     : AudioFormat.CHANNEL_OUT_MONO;
-            playClients.incrementAndGet();
             playbackStarted = true;
             int min = AudioTrack.getMinBufferSize(rate, channelMask,
                     AudioFormat.ENCODING_PCM_16BIT);
-            // Keep about 200 ms queued. A small buffer underruns and a short
-            // stop() cuts the tail of a sentence; 200 ms rides out jitter and
-            // leaves the drain wait below short.
-            int target = rate * channels * 2 / 5;
+            // Two seconds of headroom, with a short pre-roll before playback
+            // starts. Antigravity's TTS arrives in bursts; without a pre-roll
+            // the queue is empty when the second burst is still being
+            // generated, and the sentence breaks at the burst boundary.
+            int target = rate * channels * 4;
             int buffer = Math.max(min > 0 ? min : 4096, Math.max(target, 4096));
+            int preRoll = Math.max(rate * channels * 3 / 5, 4096);
             AudioTrack track = new AudioTrack(AudioManager.STREAM_MUSIC, rate,
                     channelMask, AudioFormat.ENCODING_PCM_16BIT, buffer,
                     AudioTrack.MODE_STREAM);
@@ -206,7 +208,7 @@ public final class AudioBridge {
             int read;
             long frames = 0;
             int bytesPerFrame = channels * 2;
-            track.play();
+            boolean playing = false;
             while ((read = in.read(data)) > 0) {
                 int offset = 0;
                 while (offset < read) {
@@ -223,6 +225,21 @@ public final class AudioBridge {
                     offset += written;
                     frames += written / bytesPerFrame;
                 }
+                // Mute exactly while audio is still queued or playing, plus a
+                // short reverb tail. A silent-but-open player does not hold
+                // the microphone hostage.
+                long queued = Math.max(0, frames - track.getPlaybackHeadPosition());
+                long audibleMs = queued * 1000L / Math.max(1, rate);
+                micMuteUntil = Math.max(micMuteUntil,
+                        System.currentTimeMillis() + audibleMs + 250L);
+                if (!playing && frames * bytesPerFrame >= preRoll) {
+                    track.play();
+                    playing = true;
+                }
+            }
+            if (!playing) {
+                // A very short clip never reaches the pre-roll; play it now.
+                track.play();
             }
             // Wait for the head to catch up before stopping: stop() on a
             // streaming track can discard whatever is still queued, which is
@@ -236,16 +253,18 @@ public final class AudioBridge {
                 track.stop();
             } catch (Throwable ignored) {
             }
+            int underruns = track.getUnderrunCount();
             track.release();
-            Logger.i("audio: play done frames=" + frames);
+            Logger.i("audio: play done frames=" + frames
+                    + " underruns=" + underruns);
         } catch (Throwable t) {
             Logger.i("audio: play failed " + header + ": " + t);
         } finally {
             if (playbackStarted) {
                 // Keep the microphone shut a little longer: the last words
                 // still ring in the room after the socket is drained.
-                micMuteUntil = System.currentTimeMillis() + 700L;
-                playClients.decrementAndGet();
+                micMuteUntil = Math.max(micMuteUntil,
+                        System.currentTimeMillis() + 400L);
             }
             try {
                 client.close();
