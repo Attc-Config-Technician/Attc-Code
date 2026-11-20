@@ -6,6 +6,7 @@ import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.AudioTrack;
 import android.media.MediaRecorder;
+import android.media.audiofx.AcousticEchoCanceler;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -47,6 +48,11 @@ public final class AudioBridge {
     private static ServerSocket playServer;
     private static ServerSocket recServer;
     private static Context appContext;
+    /** Number of playback clients currently sounding. */
+    private static final java.util.concurrent.atomic.AtomicInteger playClients =
+            new java.util.concurrent.atomic.AtomicInteger();
+    /** Microphone stays muted until this moment, to swallow speaker reverb. */
+    private static volatile long micMuteUntil;
 
     private AudioBridge() {
     }
@@ -156,8 +162,18 @@ public final class AudioBridge {
         }
     }
 
+    /**
+     * True while the speaker is (or was just) sounding. The phone microphone
+     * sits next to the speaker; without this gate Antigravity transcribes its
+     * own voice, treats it as a user turn and restarts the same sentence.
+     */
+    private static boolean echoGuardActive() {
+        return playClients.get() > 0 || System.currentTimeMillis() < micMuteUntil;
+    }
+
     private static void handlePlay(Socket client) {
         String header = null;
+        boolean playbackStarted = false;
         try {
             client.setTcpNoDelay(true);
             InputStream in = client.getInputStream();
@@ -172,31 +188,65 @@ public final class AudioBridge {
             int channelMask = channels == 2
                     ? AudioFormat.CHANNEL_OUT_STEREO
                     : AudioFormat.CHANNEL_OUT_MONO;
+            playClients.incrementAndGet();
+            playbackStarted = true;
             int min = AudioTrack.getMinBufferSize(rate, channelMask,
                     AudioFormat.ENCODING_PCM_16BIT);
-            int buffer = Math.max(min > 0 ? min : 4096, 4096);
+            // Keep about 200 ms queued. A small buffer underruns and a short
+            // stop() cuts the tail of a sentence; 200 ms rides out jitter and
+            // leaves the drain wait below short.
+            int target = rate * channels * 2 / 5;
+            int buffer = Math.max(min > 0 ? min : 4096, Math.max(target, 4096));
             AudioTrack track = new AudioTrack(AudioManager.STREAM_MUSIC, rate,
                     channelMask, AudioFormat.ENCODING_PCM_16BIT, buffer,
                     AudioTrack.MODE_STREAM);
             Logger.i("audio: play rate=" + rate + " ch=" + channels
                     + " buffer=" + buffer);
-            byte[] data = new byte[4096];
+            byte[] data = new byte[8192];
             int read;
+            long frames = 0;
+            int bytesPerFrame = channels * 2;
             track.play();
             while ((read = in.read(data)) > 0) {
-                track.write(data, 0, read);
+                int offset = 0;
+                while (offset < read) {
+                    // write() may accept fewer bytes than asked; dropping the
+                    // remainder is what made a long reply stop mid-sentence.
+                    int written = track.write(data, offset, read - offset);
+                    if (written < 0) {
+                        throw new IOException("audio: write " + written);
+                    }
+                    if (written == 0) {
+                        sleep(5L);
+                        continue;
+                    }
+                    offset += written;
+                    frames += written / bytesPerFrame;
+                }
             }
-            // Let the queued frames reach the speaker before tearing down.
-            sleep(120L);
+            // Wait for the head to catch up before stopping: stop() on a
+            // streaming track can discard whatever is still queued, which is
+            // what cut long replies in half.
+            long deadline = System.currentTimeMillis() + 5000L;
+            while (track.getPlaybackHeadPosition() < frames
+                    && System.currentTimeMillis() < deadline) {
+                sleep(20L);
+            }
             try {
                 track.stop();
             } catch (Throwable ignored) {
             }
             track.release();
-            Logger.i("audio: play done");
+            Logger.i("audio: play done frames=" + frames);
         } catch (Throwable t) {
             Logger.i("audio: play failed " + header + ": " + t);
         } finally {
+            if (playbackStarted) {
+                // Keep the microphone shut a little longer: the last words
+                // still ring in the room after the socket is drained.
+                micMuteUntil = System.currentTimeMillis() + 700L;
+                playClients.decrementAndGet();
+            }
             try {
                 client.close();
             } catch (IOException ignored) {
@@ -208,6 +258,7 @@ public final class AudioBridge {
         String header = null;
         boolean toldListener = false;
         AudioRecord record = null;
+        AcousticEchoCanceler aec = null;
         try {
             client.setTcpNoDelay(true);
             InputStream in = client.getInputStream();
@@ -226,11 +277,27 @@ public final class AudioBridge {
             int min = AudioRecord.getMinBufferSize(rate, channelMask,
                     AudioFormat.ENCODING_PCM_16BIT);
             int buffer = Math.max(min > 0 ? min : 4096, 4096);
-            record = new AudioRecord(MediaRecorder.AudioSource.MIC, rate,
-                    channelMask, AudioFormat.ENCODING_PCM_16BIT, buffer);
+            // VOICE_COMMUNICATION asks the platform for echo cancellation
+            // and noise suppression, which is exactly this call's problem.
+            record = new AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                    rate, channelMask, AudioFormat.ENCODING_PCM_16BIT, buffer);
+            if (record.getState() != AudioRecord.STATE_INITIALIZED) {
+                record.release();
+                record = new AudioRecord(MediaRecorder.AudioSource.MIC, rate,
+                        channelMask, AudioFormat.ENCODING_PCM_16BIT, buffer);
+            }
             if (record.getState() != AudioRecord.STATE_INITIALIZED) {
                 Logger.i("audio: recorder not initialized");
                 return;
+            }
+            try {
+                aec = AcousticEchoCanceler.create(record.getAudioSessionId());
+                if (aec != null) {
+                    aec.setEnabled(true);
+                    Logger.i("audio: aec " + aec.getEnabled());
+                }
+            } catch (Throwable t) {
+                Logger.i("audio: aec unavailable " + t);
             }
             Listener l = listener;
             if (l != null) {
@@ -249,12 +316,22 @@ public final class AudioBridge {
                     }
                     continue;
                 }
+                if (echoGuardActive()) {
+                    // Speaker is talking: send silence, never our own echo.
+                    java.util.Arrays.fill(data, 0, read, (byte) 0);
+                }
                 out.write(data, 0, read);
                 out.flush();
             }
         } catch (Throwable t) {
             Logger.i("audio: rec closed " + header + ": " + t);
         } finally {
+            if (aec != null) {
+                try {
+                    aec.release();
+                } catch (Throwable ignored) {
+                }
+            }
             if (record != null) {
                 try {
                     record.stop();

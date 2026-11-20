@@ -112,6 +112,9 @@ public final class MainActivity extends Activity implements Hub.Listener {
     private String shizukuStatus = "Shizuku not running";
     private View chooser;
     private View panel;
+    private View cliDrawer;
+    private FrameLayout cliDrawerScrim;
+    private LinearLayout cliDrawerList;
     private LinearLayout panelBody;
     private boolean shizukuGranted;
 
@@ -227,6 +230,7 @@ public final class MainActivity extends Activity implements Hub.Listener {
         textInputRow = buildTextInputRow();
         root.addView(textInputRow);
         root.addView(buildExtraKeys());
+        buildCliDrawer();
 
         setContentView(root);
     }
@@ -575,6 +579,8 @@ public final class MainActivity extends Activity implements Hub.Listener {
         bar.setBackgroundColor(0xFF111823);
         bar.setPadding(dp(14), dp(10), dp(8), dp(10));
 
+        bar.addView(barButton("\u2630", v -> openCliDrawer()));
+
         dot = new TextView(this);
         dot.setText("\u25CF");
         dot.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
@@ -624,6 +630,202 @@ public final class MainActivity extends Activity implements Hub.Listener {
         return b;
     }
 
+    /** A left-to-right drawer listing every CLI window, running or not. */
+    private void buildCliDrawer() {
+        if (stage == null || cliDrawerScrim != null) {
+            return;
+        }
+        cliDrawerScrim = new FrameLayout(this);
+        cliDrawerScrim.setBackgroundColor(0x99000000);
+        cliDrawerScrim.setVisibility(View.GONE);
+        cliDrawerScrim.setClickable(true);
+        cliDrawerScrim.setOnClickListener(v -> closeCliDrawer());
+        stage.addView(cliDrawerScrim, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+
+        LinearLayout drawer = new LinearLayout(this);
+        drawer.setOrientation(LinearLayout.VERTICAL);
+        drawer.setBackgroundColor(0xFF0F1620);
+        drawer.setClickable(true);
+        drawer.setPadding(dp(14), dp(14), dp(14), dp(10));
+        drawer.setTranslationX(-dp(310));
+        cliDrawerScrim.addView(drawer, new FrameLayout.LayoutParams(
+                dp(300), ViewGroup.LayoutParams.MATCH_PARENT));
+        cliDrawer = drawer;
+
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        drawer.addView(header);
+
+        TextView title = new TextView(this);
+        title.setText("CLI windows");
+        title.setTextColor(0xFFE6EDF3);
+        title.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        header.addView(title, titleParams);
+
+        TextView close = barButton("\u00D7", v -> closeCliDrawer());
+        header.addView(close);
+
+        TextView hint = new TextView(this);
+        hint.setText("Every CLI keeps running in its own PTY. Tap one to switch.");
+        hint.setTextColor(0xFF7D8B99);
+        hint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        hint.setPadding(0, dp(2), 0, dp(10));
+        drawer.addView(hint);
+
+        ScrollView scroll = new ScrollView(this);
+        cliDrawerList = new LinearLayout(this);
+        cliDrawerList.setOrientation(LinearLayout.VERTICAL);
+        scroll.addView(cliDrawerList);
+        drawer.addView(scroll, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+    }
+
+    private void openCliDrawer() {
+        if (cliDrawerScrim == null) {
+            buildCliDrawer();
+        }
+        if (cliDrawerScrim == null) {
+            return;
+        }
+        refreshCliDrawer();
+        cliDrawerScrim.setVisibility(View.VISIBLE);
+        cliDrawer.setTranslationX(-dp(310));
+        cliDrawer.animate().translationX(0f).setDuration(180).start();
+    }
+
+    private void closeCliDrawer() {
+        if (cliDrawerScrim == null || cliDrawerScrim.getVisibility() != View.VISIBLE) {
+            return;
+        }
+        cliDrawer.animate().translationX(-dp(310)).setDuration(160)
+                .withEndAction(() -> cliDrawerScrim.setVisibility(View.GONE))
+                .start();
+    }
+
+    private void refreshCliDrawer() {
+        if (cliDrawerList == null) {
+            return;
+        }
+        cliDrawerList.removeAllViews();
+        if (!Hub.sessions.isEmpty()) {
+            cliDrawerList.addView(drawerSection("Running"));
+            for (Session session : Hub.sessions) {
+                boolean active = session == Hub.session;
+                String detail = session.isRunning()
+                        ? (session.cliRunning() ? "running" : "shell prompt")
+                        : "closed";
+                cliDrawerList.addView(cliDrawerRow(
+                        cliKind(session.cli()), session.label() + "  #" + session.id(),
+                        detail, active, () -> switchToSession(session)));
+            }
+        }
+        cliDrawerList.addView(drawerSection("Open another"));
+        String[][] options = {
+                {"opencode", "Attc Code"}, {"claude", "Claude Code"},
+                {"agy", "Antigravity"}, {"codex", "Codex"},
+                {"kimi", "Kimi Code"}, {"terminal", "Ubuntu terminal"}};
+        for (String[] option : options) {
+            Session running = Hub.findByCli(option[0]);
+            String detail = running != null ? "running - tap to switch"
+                    : "open in a new window";
+            cliDrawerList.addView(cliDrawerRow(
+                    cliKind(option[0]), option[1], detail, false,
+                    () -> startCli(option[0])));
+        }
+    }
+
+    private TextView drawerSection(String text) {
+        TextView view = new TextView(this);
+        view.setText(text.toUpperCase());
+        view.setTextColor(0xFF5F6C7A);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+        view.setTypeface(Typeface.DEFAULT_BOLD);
+        view.setPadding(dp(2), dp(12), 0, dp(4));
+        return view;
+    }
+
+    private View cliDrawerRow(int kind, String name, String detail,
+                              boolean active, Runnable click) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(active ? 0xFF163326 : 0xFF141C26);
+        bg.setCornerRadius(dp(12));
+        bg.setStroke(dp(1), active ? 0xFF00E5A0 : 0xFF1F2A37);
+        row.setBackground(bg);
+        row.setPadding(dp(10), dp(9), dp(10), dp(9));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.bottomMargin = dp(7);
+        row.setLayoutParams(params);
+
+        row.addView(new CliLogo(this, kind), new LinearLayout.LayoutParams(
+                dp(30), dp(30)));
+
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        textParams.leftMargin = dp(10);
+        row.addView(texts, textParams);
+
+        TextView title = new TextView(this);
+        title.setText(name);
+        title.setTextColor(0xFFE6EDF3);
+        title.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        texts.addView(title);
+
+        TextView sub = new TextView(this);
+        sub.setText(detail);
+        sub.setTextColor(active ? 0xFF00E5A0 : 0xFF7D8B99);
+        sub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+        texts.addView(sub);
+
+        row.setOnClickListener(v -> {
+            closeCliDrawer();
+            click.run();
+        });
+        return row;
+    }
+
+    private void switchToSession(Session session) {
+        if (session == null || !session.isRunning()) {
+            return;
+        }
+        Hub.setActive(session);
+        statusText.setText(session.cliRunning() ? "Running" : "Terminal");
+        startService(new Intent(this, TerminalService.class)
+                .setAction(TerminalService.ACTION_SWITCH)
+                .putExtra(TerminalService.EXTRA_CLI, session.cli()));
+    }
+
+    private static int cliKind(String cli) {
+        if ("claude".equals(cli)) {
+            return CliLogo.CLAUDE;
+        }
+        if ("agy".equals(cli)) {
+            return CliLogo.ANTIGRAVITY;
+        }
+        if ("codex".equals(cli)) {
+            return CliLogo.CODEX;
+        }
+        if ("kimi".equals(cli)) {
+            return CliLogo.KIMI;
+        }
+        if ("terminal".equals(cli)) {
+            return CliLogo.TERMINAL;
+        }
+        return CliLogo.ATTC;
+    }
+
     // ------------------------------------------------------------- lifecycle
 
     private void startTerminal() {
@@ -666,6 +868,9 @@ public final class MainActivity extends Activity implements Hub.Listener {
         }
         if (retry != null) {
             retry.setVisibility(Hub.failed ? View.VISIBLE : View.GONE);
+        }
+        if (cliDrawerScrim != null && cliDrawerScrim.getVisibility() == View.VISIBLE) {
+            refreshCliDrawer();
         }
         if (Hub.cliExited) {
             Hub.cliExited = false;
@@ -1288,7 +1493,7 @@ public final class MainActivity extends Activity implements Hub.Listener {
         final String[] values = new String[VOICE_CLIS.length + 1];
         final String[] labels = new String[VOICE_CLIS.length + 1];
         values[0] = "";
-        labels[0] = "Auto (last used CLI)";
+        labels[0] = "Antigravity (default)";
         for (int i = 0; i < VOICE_CLIS.length; i++) {
             values[i + 1] = VOICE_CLIS[i];
             labels[i + 1] = SessionStore.label(VOICE_CLIS[i]);
@@ -1316,7 +1521,7 @@ public final class MainActivity extends Activity implements Hub.Listener {
     private String voiceCliLabel() {
         String cli = prefs.getString(VoiceEngine.KEY_CLI, "");
         if (cli == null || cli.isEmpty()) {
-            return "Auto (last used)";
+            return "Antigravity (default)";
         }
         return SessionStore.label(cli);
     }

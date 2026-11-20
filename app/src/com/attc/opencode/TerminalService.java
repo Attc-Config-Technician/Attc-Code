@@ -32,6 +32,7 @@ import java.util.concurrent.Executors;
 public class TerminalService extends Service {
 
     public static final String ACTION_START = "com.attc.opencode.START";
+    public static final String ACTION_SWITCH = "com.attc.opencode.SWITCH";
     public static final String ACTION_RETRY = "com.attc.opencode.RETRY";
     public static final String ACTION_KEEP_AWAKE = "com.attc.opencode.KEEP_AWAKE";
     public static final String ACTION_DISABLE_AWAKE = "com.attc.opencode.DISABLE_AWAKE";
@@ -178,6 +179,14 @@ public class TerminalService extends Service {
             case ACTION_DISABLE_AWAKE:
                 setKeepAwake(false);
                 return START_STICKY;
+            case ACTION_SWITCH: {
+                String cli = intent == null ? null : intent.getStringExtra(EXTRA_CLI);
+                Session target = Hub.findByCli(cli);
+                if (target != null) {
+                    activateSession(target);
+                }
+                return START_STICKY;
+            }
             case ACTION_RETRY:
                 startForeground(NOTIFICATION_ID, buildNotification());
                 retry();
@@ -290,15 +299,9 @@ public class TerminalService extends Service {
                 if (cli != null && !cli.isEmpty()) {
                     pendingCli = cli;
                     if (setup != null) {
-                        if (Hub.session == null) {
-                            startSession();
-                        } else if (!cliRunning) {
-                            // The shell is still at the prompt after the last
-                            // CLI exited: run the new pick in that same PTY.
-                            launchSelectedCli(cli);
-                        } else {
-                            Logger.i("session: " + cli + " ignored, a CLI is active");
-                        }
+                        // Each pick gets its own PTY; switching back to a
+                        // running CLI only changes which session is visible.
+                        openCli(cli);
                     }
                 }
                 if (!booting && setup == null) {
@@ -313,6 +316,12 @@ public class TerminalService extends Service {
 
     private void boot() {
         Hub.failed = false;
+        for (Session old : Hub.sessions) {
+            old.setExitListener(null);
+            old.close();
+        }
+        Hub.sessions.clear();
+        Hub.setActive(null);
         Hub.buffer = new TerminalBuffer(24, 80);
         Hub.clearTail();
         Hub.setStatus("Starting...");
@@ -337,12 +346,12 @@ public class TerminalService extends Service {
     }
 
     private void restart() {
-        Session old = Hub.session;
-        Hub.session = null;
-        if (old != null) {
+        for (Session old : Hub.sessions) {
             old.setExitListener(null);
             old.close();
         }
+        Hub.sessions.clear();
+        Hub.session = null;
         Hub.failed = false;
         booting = true;
         Hub.buffer = new TerminalBuffer(24, 80);
@@ -555,37 +564,127 @@ public class TerminalService extends Service {
         t.start();
     }
 
-    /** Runs a new pick in the PTY that is already sitting at the prompt. */
+    /** Opens (or switches to) a CLI, one PTY per CLI so they can run together. */
     private void launchSelectedCli(String cli) {
-        if (Hub.session == null) {
-            startSession();
-            return;
-        }
-        launchIntoSession(cli);
+        openCli(cli);
     }
 
-    /** Writes the chosen CLI (or the plain shell) into the live PTY. */
-    private void launchIntoSession(String cli) {
-        Session session = Hub.session;
+    private void openCli(String cli) {
+        if (cli == null || cli.isEmpty()) {
+            cli = "opencode";
+        }
+        Session running = Hub.findByCli(cli);
+        if (running != null) {
+            activateSession(running);
+            if (!running.cliRunning()) {
+                // The PTY is sitting at the shell prompt after an earlier exit.
+                launchIntoSession(running, cli);
+            }
+            return;
+        }
+        if (setup == null) {
+            pendingCli = cli;
+            if (!booting) {
+                booting = true;
+                worker.execute(this::boot);
+            }
+            return;
+        }
+        startNewSession(cli);
+    }
+
+    /** Creates a fresh PTY for one CLI; other CLI sessions keep running. */
+    private void startNewSession(String cli) {
+        int rows = Hub.buffer != null ? Hub.buffer.rows() : 24;
+        int cols = Hub.buffer != null ? Hub.buffer.cols() : 80;
+        TerminalBuffer buffer = new TerminalBuffer(rows, cols);
+        Session session = new Session(buffer, cli, SessionStore.label(cli));
+        session.setExitListener(code -> onSessionEnded(session, code));
+        String[] argv = buildArgv("/bin/bash", "-l");
+        String[] envp = buildEnv();
+        Logger.i("session: opening " + cli + " in a new pty");
+        boolean ok = session.start(argv, envp, "/", rows, cols);
+        if (!ok) {
+            Logger.e("forkpty failed for " + cli, null);
+            emit("");
+            emit("ERROR: could not start the Ubuntu shell for " + cli + ".");
+            Hub.setStatus("Could not start " + cli);
+            return;
+        }
+        Hub.addSession(session);
+        activateSession(session);
+        VoiceBridge.install(this);
+        Privacy.apply(this, setup != null ? setup.rootDir() : new Setup(this).rootDir());
+        launchIntoSession(session, cli);
+    }
+
+    private void activateSession(Session session) {
         if (session == null) {
             return;
         }
-        TerminalBuffer b = Hub.buffer;
+        Hub.setActive(session);
+        activeCli = session.cli();
+        cliRunning = session.cliRunning();
+        Hub.cliActive = true;
+        Hub.cliExited = false;
+        status = "Running";
+        Hub.setStatus(session.cliRunning() ? "Running" : "Terminal");
+        TerminalBuffer buffer = session.buffer();
+        if (buffer != null && Hub.buffer != null) {
+            int rows = Hub.buffer.rows();
+            int cols = Hub.buffer.cols();
+            buffer.resize(rows, cols);
+            session.resize(rows, cols);
+        }
+        Logger.i("session: active " + session.cli() + " id=" + session.id());
+        updateNotification();
+    }
+
+    private void onSessionEnded(Session session, int code) {
+        Hub.removeSession(session);
+        Logger.i("session: " + session.cli() + " id=" + session.id()
+                + " ended code=" + code);
+        if (Hub.session == session) {
+            Session next = Hub.firstRunning();
+            if (next != null) {
+                activateSession(next);
+            } else {
+                Hub.setActive(null);
+                cliRunning = false;
+                Hub.cliActive = false;
+                Hub.cliExited = true;
+                Hub.setStatus("Session ended (exit " + code + ")");
+            }
+        }
+        updateNotification();
+    }
+
+    /** Writes the chosen CLI (or the plain shell) into one session's PTY. */
+    private void launchIntoSession(Session session, String cli) {
+        if (session == null || !session.isRunning()) {
+            return;
+        }
+        activateSession(session);
+        TerminalBuffer b = session.buffer();
         if (b != null) {
             // The shell may have started at the boot size before the view was
             // laid out. Start the CLI in a PTY that already matches the grid
             // the user sees, otherwise its first frames scroll out of view.
             session.resize(b.rows(), b.cols());
         }
-        new File(Setup.STORAGE_DIR, "cli-exit").delete();
+        new File(Setup.STORAGE_DIR, "cli-exit-" + session.id()).delete();
+        session.markCliStarted();
         cliStartedAt = System.currentTimeMillis();
         cliRunning = !"terminal".equals(cli);
+        if ("terminal".equals(cli)) {
+            session.markCliStopped();
+        }
         Hub.cliActive = true;
         Hub.cliExited = false;
         status = "Running";
         Hub.setStatus("Running");
         SessionStore.record(cli);
-        Logger.i("session: launching " + cli);
+        Logger.i("session: launching " + cli + " id=" + session.id());
         // A fresh install or an app update can leave the CLI missing again;
         // install it once here instead of failing with "command not found".
         if (("claude".equals(cli) || "kimi".equals(cli) || "agy".equals(cli))
@@ -595,9 +694,9 @@ public class TerminalService extends Service {
         }
         activeCli = cli;
         bootstrapAudio(session);
-        // After a CLI returns, write a marker the service watches. The shared
-        // folder is reachable as /root/attc from inside the guest.
-        String exitMark = "; printf '%s' \"$?\" > /root/attc/cli-exit";
+        // After this CLI returns, write a per-session marker the service
+        // watches. A shared marker would make one CLI's exit hide another.
+        String exitMark = "; printf '%s' \"$?\" > /root/attc/cli-exit-" + session.id();
         if ("claude".equals(cli)) {
             // Claude Code talks to the in-app gateway, which speaks the
             // Anthropic Messages API and forwards to the free Zen models.
@@ -693,7 +792,7 @@ public class TerminalService extends Service {
                     }
                 });
                 emit("Codex installed.");
-                launchIntoSession("codex");
+                openCli("codex");
             } catch (Exception e) {
                 Logger.e("codex install failed", e);
                 cliRunning = false;
@@ -767,7 +866,7 @@ public class TerminalService extends Service {
             }
             if (cliInstalled(cli)) {
                 emit("Installed. Starting " + name + ".");
-                handler.postDelayed(() -> launchIntoSession(cli), 1500L);
+                handler.postDelayed(() -> openCli(cli), 1500L);
             } else {
                 emit("Install failed. Manual command: curl -fsSL " + url + " | bash");
                 Hub.setStatus("Running");
@@ -804,46 +903,11 @@ public class TerminalService extends Service {
     }
 
     private void startSession() {
-        TerminalBuffer buffer = Hub.buffer;
-        if (buffer == null) {
-            return;
-        }
         runFsProbeOnce();
-        Session session = new Session(buffer);
-        session.setExitListener(code -> {
-            booting = false;
-            cliRunning = false;
-            Hub.cliActive = false;
-            Hub.cliExited = true;
-            if (Hub.session == session) {
-                Hub.session = null;
-            }
-            Hub.setStatus("Session ended (exit " + code + ")");
-            updateNotification();
-        });
-        String[] argv = buildArgv("/bin/bash", "-l");
-        String[] envp = buildEnv();
-        Logger.i("starting pty: " + TextUtils.join(" ", argv));
-        boolean ok = session.start(argv, envp, "/", buffer.rows(), buffer.cols());
-        if (!ok) {
-            Logger.e("forkpty failed", null);
-            Hub.failed = true;
-            emit("");
-            emit("ERROR: could not start the Ubuntu shell.");
-            Hub.setStatus("Could not start the shell");
-            updateNotification();
-            return;
-        }
-        Hub.session = session;
-        status = "Running";
-        Hub.setStatus("Running");
-        VoiceBridge.install(this);
-        Privacy.apply(this, setup != null ? setup.rootDir() : new Setup(this).rootDir());
         schedulePrivacyRotation();
-        updateNotification();
         guestHome().mkdirs();
         String cli = pendingCli == null ? "opencode" : pendingCli;
-        launchIntoSession(cli);
+        openCli(cli);
         if (!quotaTimerArmed) {
             quotaTimerArmed = true;
             Logger.i("quota-reset: timer armed for " + (QuotaReset.INTERVAL_MS / 60000L) + " min");
@@ -1517,16 +1581,25 @@ public class TerminalService extends Service {
     private final Runnable cliExitTick = new Runnable() {
         @Override
         public void run() {
-            File marker = new File(Setup.STORAGE_DIR, "cli-exit");
-            if (cliRunning && marker.exists()
-                    && System.currentTimeMillis() - cliStartedAt > 1500
-                    && marker.delete()) {
-                Logger.i("session: cli exited, chooser returns");
-                cliRunning = false;
-                Hub.cliActive = false;
-                Hub.cliExited = true;
-                Hub.setStatus("Choose a CLI");
-                updateNotification();
+            long now = System.currentTimeMillis();
+            for (Session s : Hub.sessions) {
+                File marker = new File(Setup.STORAGE_DIR, "cli-exit-" + s.id());
+                if (!s.cliRunning() || !marker.exists() || !marker.delete()) {
+                    continue;
+                }
+                if (now - s.cliStartedAt() < 1500) {
+                    continue;
+                }
+                Logger.i("session: " + s.cli() + " id=" + s.id()
+                        + " exited, shell remains");
+                s.markCliStopped();
+                if (s == Hub.session) {
+                    cliRunning = false;
+                    Hub.cliActive = false;
+                    Hub.cliExited = true;
+                    Hub.setStatus("Choose a CLI");
+                    updateNotification();
+                }
             }
             handler.postDelayed(this, 1000);
         }
@@ -1798,40 +1871,35 @@ public class TerminalService extends Service {
             return;
         }
         String cli = voiceCli();
-        Session session = Hub.session;
-        if (session != null && cliRunning) {
+        Session target = Hub.findByCli(cli);
+        if (target != null && target.isRunning() && target.cliRunning()) {
+            activateSession(target);
             writeVoicePrompt(clean);
             return;
         }
         pendingVoiceText = clean;
         pendingCli = cli;
-        if (session == null) {
-            if (setup == null) {
-                if (!booting) {
-                    booting = true;
-                    worker.execute(this::boot);
-                }
-            } else {
-                worker.execute(this::startSession);
+        if (setup == null) {
+            if (!booting) {
+                booting = true;
+                worker.execute(this::boot);
             }
         } else {
-            launchSelectedCli(cli);
+            // Antigravity is the voice default; open or resume its own PTY
+            // without disturbing the CLI the user is reading.
+            openCli(cli);
         }
     }
 
     private String voiceCli() {
         String cli = prefs == null ? "" : prefs.getString(VoiceEngine.KEY_CLI, "");
         if (cli == null || cli.isEmpty() || "terminal".equals(cli)) {
-            cli = "";
-            for (SessionStore.Entry entry : SessionStore.list()) {
-                if (entry.cli != null && !entry.cli.isEmpty()
-                        && !"terminal".equals(entry.cli)) {
-                    cli = entry.cli;
-                    break;
-                }
-            }
+            // The voice system is Antigravity-first: the wake word opens a
+            // running agy session, or starts one, instead of guessing the
+            // CLI that happened to be used last.
+            return "agy";
         }
-        return cli.isEmpty() ? "opencode" : cli;
+        return cli;
     }
 
     private void writeVoicePrompt(String text) {
@@ -2005,10 +2073,12 @@ public class TerminalService extends Service {
         if (setup != null) {
             setup.cancel();
         }
-        if (Hub.session != null) {
-            Hub.session.close();
-            Hub.session = null;
+        for (Session session : Hub.sessions) {
+            session.setExitListener(null);
+            session.close();
         }
+        Hub.sessions.clear();
+        Hub.setActive(null);
         releaseLocks();
         stopForeground(true);
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);

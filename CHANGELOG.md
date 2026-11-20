@@ -3,6 +3,38 @@
 All notable changes to Attc Code are documented here. Versions follow the
 `versionName` shipped in the APK; `versionCode` is in parentheses.
 
+## 5.20.0 (89) — 2026-11-20
+
+- **Several CLIs at once.** Every pick now gets its own PTY, terminal buffer
+  and exit marker, so opening Antigravity no longer replaces a running
+  opencode session. Switching between them keeps each screen, scrollback and
+  running command intact.
+- **CLI drawer.** A menu button at the top left opens a left-to-right drawer
+  that lists every running window (with its own number, CLI name and state)
+  plus an "Open another" section for the remaining CLIs. Tapping a row
+  switches the visible terminal; tapping a CLI opens a new window.
+- **Long replies are no longer cut in half.** `AudioBridge` asked
+  `AudioTrack.write()` once per read and dropped the unwritten remainder, then
+  stopped the track while audio was still queued. It now loops until every
+  byte is written, keeps about 200 ms buffered and waits for the playback head
+  before `stop()`. An 8-second test clip now reports `play done frames=192000`
+  instead of stopping after the first sentence.
+- **Antigravity is the voice default.** With no explicit voice CLI configured,
+  the wake word targets Antigravity instead of the last used CLI: it switches
+  to a running `agy` session, resumes the one waiting at its prompt, or opens
+  a new one — without disturbing the CLI the user is reading.
+- **The CLI no longer hears itself.** Antigravity talks through the phone
+  speaker, and the phone microphone was feeding that same voice back into
+  Ubuntu, so it transcribed its own first sentence as a new user turn and
+  repeated it in a loop. While audio is playing — and for 700 ms after — the
+  recorder now receives digital silence, and the microphone asks Android for
+  echo cancellation via `VOICE_COMMUNICATION` and `AcousticEchoCanceler`.
+  A recorded probe stays at exactly zero RMS during playback and keeps ambient
+  sound before it, so the gate does not mute the user for good.
+- Per-session `cli-exit-<id>` markers replace the shared marker, and restart,
+  boot and fully-close paths release every PTY rather than just the visible
+  one.
+
 ## 5.19.0 (88) — 2026-11-20
 
 - **The terminal's own audio reaches the phone.** `AudioBridge` runs two

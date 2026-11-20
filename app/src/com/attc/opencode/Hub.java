@@ -11,6 +11,11 @@ public final class Hub {
 
     public static volatile TerminalBuffer buffer;
     public static volatile Session session;
+    /** Every live PTY, in the order it was opened. */
+    public static final CopyOnWriteArrayList<Session> sessions =
+            new CopyOnWriteArrayList<>();
+    /** CLI key of the visible session ("" for a plain shell). */
+    public static volatile String activeCli = "";
     public static volatile String status = "Starting...";
     public static volatile boolean failed;
     public static volatile boolean keepAwake;
@@ -36,9 +41,17 @@ public final class Hub {
     }
 
     public static void push(byte[] data, int len) {
-        TerminalBuffer b = buffer;
+        push(null, data, len);
+    }
+
+    /** Feeds one session's buffer; only the visible session wakes the view. */
+    public static void push(Session source, byte[] data, int len) {
+        TerminalBuffer b = source != null ? source.buffer() : buffer;
         if (b != null) {
             b.feed(data, len);
+        }
+        if (source != null && source != session) {
+            return;
         }
         synchronized (TAIL) {
             TAIL.append(new String(data, 0, len, java.nio.charset.StandardCharsets.UTF_8));
@@ -47,6 +60,49 @@ public final class Hub {
             }
         }
         notifyListeners();
+    }
+
+    public static synchronized void addSession(Session s) {
+        if (s != null && !sessions.contains(s)) {
+            sessions.add(s);
+        }
+    }
+
+    public static synchronized void removeSession(Session s) {
+        sessions.remove(s);
+    }
+
+    /** Makes a session visible and points the view at its own buffer. */
+    public static synchronized void setActive(Session s) {
+        session = s;
+        if (s != null) {
+            buffer = s.buffer();
+            activeCli = s.cli();
+        } else {
+            activeCli = "";
+        }
+        notifyListeners();
+    }
+
+    public static Session findByCli(String cli) {
+        if (cli == null) {
+            return null;
+        }
+        for (Session s : sessions) {
+            if (s.isRunning() && cli.equals(s.cli())) {
+                return s;
+            }
+        }
+        return null;
+    }
+
+    public static Session firstRunning() {
+        for (Session s : sessions) {
+            if (s.isRunning()) {
+                return s;
+            }
+        }
+        return null;
     }
 
     /** Last few KB of terminal output, for the diagnostic log. */
@@ -71,6 +127,12 @@ public final class Hub {
     public static void onSessionExit(int code) {
         status = "Session ended (exit " + code + ")";
         notifyListeners();
+    }
+
+    public static void onSessionExit(Session source, int code) {
+        if (source == null || source == session) {
+            onSessionExit(code);
+        }
     }
 
     public static void setStatus(String text) {

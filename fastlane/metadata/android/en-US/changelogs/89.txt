@@ -1,0 +1,1 @@
+Run several CLIs at once: every CLI gets its own window, and the new top-left drawer lists running sessions and lets you switch or open another. Antigravity is now the default target for the "Hey Attc" wake word, and the microphone is muted while the speaker plays so Antigravity no longer hears its own reply and loops.

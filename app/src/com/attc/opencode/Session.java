@@ -3,11 +3,19 @@ package com.attc.opencode;
 /** One PTY-backed shell process. */
 public final class Session {
 
+    private static final java.util.concurrent.atomic.AtomicInteger NEXT_ID =
+            new java.util.concurrent.atomic.AtomicInteger(1);
+
     public interface ExitListener {
         void onExit(int code);
     }
 
     private final TerminalBuffer buffer;
+    private final int id = NEXT_ID.getAndIncrement();
+    private final String cli;
+    private final String label;
+    private volatile boolean cliRunning;
+    private volatile long cliStartedAt;
     private volatile int fd = -1;
     private volatile int pid = -1;
     private volatile boolean closed;
@@ -16,11 +24,46 @@ public final class Session {
     private ExitListener exitListener;
 
     public Session(TerminalBuffer buffer) {
+        this(buffer, "", "Terminal");
+    }
+
+    public Session(TerminalBuffer buffer, String cli, String label) {
         this.buffer = buffer;
+        this.cli = cli == null ? "" : cli;
+        this.label = label == null || label.isEmpty() ? this.cli : label;
     }
 
     public TerminalBuffer buffer() {
         return buffer;
+    }
+
+    public int id() {
+        return id;
+    }
+
+    public String cli() {
+        return cli;
+    }
+
+    public String label() {
+        return label;
+    }
+
+    public boolean cliRunning() {
+        return cliRunning;
+    }
+
+    public long cliStartedAt() {
+        return cliStartedAt;
+    }
+
+    public void markCliStarted() {
+        cliRunning = true;
+        cliStartedAt = System.currentTimeMillis();
+    }
+
+    public void markCliStopped() {
+        cliRunning = false;
     }
 
     public boolean isRunning() {
@@ -54,7 +97,7 @@ public final class Session {
                 // EIO means the child finished; EBADF means we closed it.
                 break;
             }
-            Hub.push(buf, n);
+            Hub.push(this, buf, n);
         }
 
         int code = 0;
@@ -83,7 +126,7 @@ public final class Session {
         }
         closed = true;
         if (!quiet) {
-            Hub.onSessionExit(code);
+            Hub.onSessionExit(this, code);
             Logger.i("pty exited code=" + code + "\n--- output tail ---\n" + Hub.tail()
                     + "\n--- end tail ---");
         }
