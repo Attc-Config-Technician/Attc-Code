@@ -156,6 +156,7 @@ public class TerminalService extends Service {
             }
         });
         AudioBridge.start(this);
+        OverlayService.maybeStart(this);
         if (voiceEnabled() && VoiceEngine.hasPermission(this)
                 && VoiceEngine.hasTemplates(this)) {
             startVoice();
@@ -636,6 +637,7 @@ public class TerminalService extends Service {
             buffer.resize(rows, cols);
             session.resize(rows, cols);
         }
+        OverlayService.maybeStart(this);
         Logger.i("session: active " + session.cli() + " id=" + session.id());
         updateNotification();
     }

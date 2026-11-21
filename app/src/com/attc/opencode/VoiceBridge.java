@@ -78,7 +78,12 @@ public final class VoiceBridge {
             + "(or `termux-open-url <url>`). Do not claim that you cannot open "
             + "a browser; the command is available.\n"
             + "- `attc-ctl \"open <url>\"` is the same bridge if xdg-open is "
-            + "not on PATH.\n";
+            + "not on PATH.\n\n"
+            + "## Android control tools\n\n"
+            + "This session exposes MCP tools named `android_*`. When the user asks "
+            + "you to open an app, tap, swipe, type or inspect the phone, call those "
+            + "tools instead of describing steps. A live cursor overlay shows every "
+            + "action on the phone screen.\n";
 
     /**
      * Python shim installed as arecord, pw-record, parec, paplay, pw-cat and
@@ -375,6 +380,9 @@ public final class VoiceBridge {
                 return;
             }
             File home = new File(root, "root");
+            File mcp = new File(Setup.STORAGE_DIR, "android-mcp.py");
+            copyAsset(context, "android-mcp.py", mcp);
+            mergeMcpConfig(new File(home, ".config/opencode/opencode.json"));
             File bin = new File(home, ".local/bin");
             if (!bin.exists() && !bin.mkdirs()) {
                 return;
@@ -394,6 +402,8 @@ public final class VoiceBridge {
             File agents = new File(home, "AGENTS.md");
             if (!agents.exists()) {
                 write(agents, AGENTS_HELPER);
+            } else {
+                ensureAgentsMcp(agents);
             }
             // Audio shims. .local/bin comes first on the PATH the app exports,
             // and /usr/local/bin shadows the real pulseaudio-utils binaries
@@ -416,6 +426,123 @@ public final class VoiceBridge {
             Logger.i("voice: attc-ctl/xdg-open/audio installed at " + bin);
         } catch (Throwable t) {
             Logger.i("voice: attc-ctl install failed " + t);
+        }
+    }
+
+    private static void ensureAgentsMcp(File agents) {
+        try {
+            String text = readText(agents);
+            if (text.contains("Android control tools")) {
+                return;
+            }
+            String hint = "\n## Android control tools\n\n"
+                    + "This session exposes MCP tools named `android_*`. When the user asks "
+                    + "you to open an app, tap, swipe, type or inspect the phone, call those "
+                    + "tools instead of describing steps. A live cursor overlay shows every "
+                    + "action on the phone screen.\n";
+            writeText(agents, text + hint);
+            Logger.i("voice: AGENTS.md updated with MCP hint");
+        } catch (Throwable t) {
+            Logger.i("voice: AGENTS.md update failed " + t);
+        }
+    }
+
+    private static void copyAsset(Context context, String name, File target) throws Exception {
+        java.io.InputStream in = context.getAssets().open(name);
+        try {
+            FileOutputStream out = new FileOutputStream(target);
+            try {
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = in.read(buffer)) > 0) {
+                    out.write(buffer, 0, read);
+                }
+            } finally {
+                out.close();
+            }
+        } finally {
+            in.close();
+        }
+    }
+
+    private static void mergeMcpConfig(File config) {
+        try {
+            if (!config.exists()) {
+                File parent = config.getParentFile();
+                if (parent != null) {
+                    parent.mkdirs();
+                }
+                org.json.JSONObject root = new org.json.JSONObject();
+                root.put("$schema", "https://opencode.ai/config.json");
+                root.put("mcp", mcpSection());
+                writeText(config, root.toString(2));
+                Logger.i("mcp: config created " + config);
+                return;
+            }
+            String text = readText(config);
+            org.json.JSONObject root = new org.json.JSONObject(text);
+            org.json.JSONObject mcp = root.optJSONObject("mcp");
+            if (mcp == null) {
+                mcp = new org.json.JSONObject();
+                root.put("mcp", mcp);
+            }
+            mcp.remove("android");
+            org.json.JSONObject servers = mcp.optJSONObject("servers");
+            if (servers == null) {
+                servers = new org.json.JSONObject();
+                mcp.put("servers", servers);
+            }
+            servers.put("android", mcpAndroid());
+            writeText(config, root.toString(2));
+            Logger.i("mcp: config merged " + config);
+        } catch (Throwable t) {
+            Logger.i("mcp: config merge failed " + t);
+        }
+    }
+
+    private static org.json.JSONObject mcpSection() throws Exception {
+        org.json.JSONObject servers = new org.json.JSONObject();
+        servers.put("android", mcpAndroid());
+        org.json.JSONObject mcp = new org.json.JSONObject();
+        mcp.put("servers", servers);
+        return mcp;
+    }
+
+    private static org.json.JSONObject mcpAndroid() throws Exception {
+        org.json.JSONObject android = new org.json.JSONObject();
+        android.put("type", "local");
+        android.put("disabled", false);
+        org.json.JSONArray command = new org.json.JSONArray();
+        command.put("python3");
+        command.put("/root/attc/android-mcp.py");
+        android.put("command", command);
+        return android;
+    }
+
+    private static String readText(File file) throws Exception {
+        FileInputStream in = new FileInputStream(file);
+        try {
+            byte[] data = new byte[(int) file.length()];
+            int offset = 0;
+            while (offset < data.length) {
+                int read = in.read(data, offset, data.length - offset);
+                if (read <= 0) {
+                    break;
+                }
+                offset += read;
+            }
+            return new String(data, 0, offset, StandardCharsets.UTF_8);
+        } finally {
+            in.close();
+        }
+    }
+
+    private static void writeText(File file, String text) throws Exception {
+        FileOutputStream out = new FileOutputStream(file);
+        try {
+            out.write(text.getBytes(StandardCharsets.UTF_8));
+        } finally {
+            out.close();
         }
     }
 

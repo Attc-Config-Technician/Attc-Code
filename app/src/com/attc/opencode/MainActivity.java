@@ -47,6 +47,7 @@ import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.SeekBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -149,6 +150,10 @@ public final class MainActivity extends Activity implements Hub.Listener {
         startTerminal();
         maybeStartFakeVpn();
         handleIntent(getIntent());
+        uiHandler.postDelayed(() -> Updater.checkQuiet(this), 2500L);
+        if (Settings.canDrawOverlays(this)) {
+            uiHandler.postDelayed(() -> OverlayService.maybeStart(this), 2500L);
+        }
         if (!prefs.getBoolean("onboarding_done", false)) {
             uiHandler.postDelayed(this::showOnboarding, 900L);
         }
@@ -1003,6 +1008,66 @@ public final class MainActivity extends Activity implements Hub.Listener {
 
         box.addView(item("Kullanım kılavuzu", v -> showOnboarding()));
 
+
+        final CheckBox overlay = new CheckBox(this);
+        overlay.setText("Canlı aktivite penceresi (uçan pencere)");
+        overlay.setTextColor(0xFFE6EDF3);
+        overlay.setChecked(prefs.getBoolean(OverlayService.PREF_ENABLED, true));
+        overlay.setOnCheckedChangeListener((v, checked) -> {
+            prefs.edit().putBoolean(OverlayService.PREF_ENABLED, checked).apply();
+            if (!checked) {
+                startService(new Intent(this, OverlayService.class)
+                        .setAction(OverlayService.ACTION_HIDE));
+            } else if (!Settings.canDrawOverlays(this)) {
+                openOverlaySettings();
+            } else {
+                OverlayService.maybeStart(this);
+                startService(new Intent(this, OverlayService.class)
+                        .setAction(OverlayService.ACTION_SHOW));
+            }
+        });
+        box.addView(overlay);
+        box.addView(item(Settings.canDrawOverlays(this)
+                ? "Canlı pencereyi göster / gizle"
+                : "Uçan pencere iznini ver", v -> {
+            if (!Settings.canDrawOverlays(this)) {
+                openOverlaySettings();
+            } else {
+                startService(new Intent(this, OverlayService.class).setAction(
+                        OverlayService.visible ? OverlayService.ACTION_HIDE
+                                : OverlayService.ACTION_SHOW));
+            }
+        }));
+
+        SeekBar overlayAlpha = new SeekBar(this);
+        overlayAlpha.setMax(80);
+        overlayAlpha.setProgress(Math.max(0, Math.min(80,
+                prefs.getInt(OverlayService.PREF_ALPHA, 92) - 20)));
+        final TextView overlayAlphaLabel = new TextView(this);
+        overlayAlphaLabel.setText("Pencere saydamlığı: %" + (overlayAlpha.getProgress() + 20));
+        overlayAlphaLabel.setTextColor(0xFF7D8B99);
+        overlayAlphaLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        overlayAlpha.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
+                overlayAlphaLabel.setText("Pencere saydamlığı: %" + (progress + 20));
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar bar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar bar) {
+                int value = bar.getProgress() + 20;
+                prefs.edit().putInt(OverlayService.PREF_ALPHA, value).apply();
+                startService(new Intent(MainActivity.this, OverlayService.class)
+                        .setAction(OverlayService.ACTION_REFRESH));
+            }
+        });
+        box.addView(overlayAlphaLabel);
+        box.addView(overlayAlpha);
+
         CheckBox boot = new CheckBox(this);
         boot.setText("Start terminal on boot");
         boot.setTextColor(0xFFE6EDF3);
@@ -1067,6 +1132,35 @@ public final class MainActivity extends Activity implements Hub.Listener {
         box.addView(item("Test wake now", v ->
                 sendService(new Intent(this, TerminalService.class)
                         .setAction(TerminalService.ACTION_VOICE_WAKE_TEST))));
+
+        section(box, "Güncellemeler");
+
+        box.addView(item("Sürüm: " + appVersion() + " • Şimdi kontrol et", v -> {
+            Toast.makeText(this, "Güncelleme kontrol ediliyor...", Toast.LENGTH_SHORT).show();
+            Updater.check(this, (message, available) -> runOnUiThread(() -> {
+                Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+                Logger.i("update: " + message);
+            }));
+        }));
+
+        CheckBox autoUpdate = new CheckBox(this);
+        autoUpdate.setText("Otomatik güncelleme (GitHub)");
+        autoUpdate.setTextColor(0xFFE6EDF3);
+        autoUpdate.setChecked(prefs.getBoolean(Updater.PREF_AUTO, true));
+        autoUpdate.setOnCheckedChangeListener((v, checked) ->
+                prefs.edit().putBoolean(Updater.PREF_AUTO, checked).apply());
+        box.addView(autoUpdate);
+
+        if (prefs.contains(Updater.PREF_AVAILABLE)) {
+            box.addView(item("Güncellemeyi indir ve kur: "
+                    + prefs.getString(Updater.PREF_AVAILABLE, ""),
+                    v -> Updater.downloadAndInstall(this)));
+        }
+        if (!getPackageManager().canRequestPackageInstalls()) {
+            box.addView(item("Bilinmeyen kaynak iznini ver",
+                    v -> Updater.openInstallPermission(this)));
+        }
+        note(box, "GitHub Releases kontrol edilir; APK imzası, SHA-256 özeti ve sürüm kodu doğrulanır. Android kurulum onayı gösterir; aktif terminal oturumu varsa kurulum ertelenir.");
 
         section(box, "Network");
 
@@ -1315,6 +1409,23 @@ public final class MainActivity extends Activity implements Hub.Listener {
         }
         pendingEnableVoice = false;
         requestPermissions(new String[]{PERM_RECORD_AUDIO}, REQ_VOICE_MIC);
+    }
+
+    private String appVersion() {
+        try {
+            return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (Throwable t) {
+            return "?";
+        }
+    }
+
+    private void openOverlaySettings() {
+        try {
+            startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:" + getPackageName())));
+        } catch (Throwable t) {
+            Toast.makeText(this, "Overlay ayarları açılamadı", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void openAppSettings() {
@@ -1990,6 +2101,28 @@ public final class MainActivity extends Activity implements Hub.Listener {
         if (intent != null && intent.getBooleanExtra("fstest", false)) {
             startService(new Intent(this, TerminalService.class)
                     .setAction(TerminalService.ACTION_FS_TEST));
+        }
+        if (intent != null && intent.getBooleanExtra("installupdate", false)) {
+            Updater.downloadAndInstall(this);
+        }
+        if (intent != null && intent.getBooleanExtra("updatepermission", false)) {
+            Updater.openInstallPermission(this);
+        }
+        if (intent != null && intent.getBooleanExtra("checkupdate", false)) {
+            Updater.check(this, (message, available) -> runOnUiThread(() ->
+                    Toast.makeText(this, message, Toast.LENGTH_LONG).show()));
+        }
+        if (intent != null && intent.getBooleanExtra("overlay", false)) {
+            if (!Settings.canDrawOverlays(this)) {
+                openOverlaySettings();
+            } else {
+                startService(new Intent(this, OverlayService.class)
+                        .setAction(OverlayService.ACTION_SHOW));
+            }
+        }
+        if (intent != null && intent.getBooleanExtra("overlayhide", false)) {
+            startService(new Intent(this, OverlayService.class)
+                    .setAction(OverlayService.ACTION_HIDE));
         }
         if (intent != null && intent.getBooleanExtra("showguide", false)) {
             uiHandler.postDelayed(this::showOnboarding, 300L);
