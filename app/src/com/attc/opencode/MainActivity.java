@@ -1068,6 +1068,35 @@ public final class MainActivity extends Activity implements Hub.Listener {
         box.addView(overlayAlphaLabel);
         box.addView(overlayAlpha);
 
+        SeekBar overlaySize = new SeekBar(this);
+        overlaySize.setMax(60);
+        overlaySize.setProgress(Math.max(0, Math.min(60,
+                prefs.getInt(OverlayService.PREF_SIZE, 60) - 40)));
+        final TextView overlaySizeLabel = new TextView(this);
+        overlaySizeLabel.setText("Pencere boyutu: %" + (overlaySize.getProgress() + 40));
+        overlaySizeLabel.setTextColor(0xFF7D8B99);
+        overlaySizeLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        overlaySize.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
+                overlaySizeLabel.setText("Pencere boyutu: %" + (progress + 40));
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar bar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar bar) {
+                int value = bar.getProgress() + 40;
+                prefs.edit().putInt(OverlayService.PREF_SIZE, value).apply();
+                startService(new Intent(MainActivity.this, OverlayService.class)
+                        .setAction(OverlayService.ACTION_REFRESH));
+            }
+        });
+        box.addView(overlaySizeLabel);
+        box.addView(overlaySize);
+
         CheckBox boot = new CheckBox(this);
         boot.setText("Start terminal on boot");
         boot.setTextColor(0xFFE6EDF3);

@@ -82,6 +82,71 @@ public final class AudioBridge {
         Logger.i("audio: bridge stopped");
     }
 
+    public static final int CHIME_ATTENTION = 0;
+    public static final int CHIME_DONE = 1;
+    public static final int CHIME_ERROR = 2;
+    private static volatile long lastChimeAt;
+
+    /** Plays a short phone-side chime for terminal bells and task completion. */
+    public static void chime(int kind) {
+        long now = System.currentTimeMillis();
+        if (now - lastChimeAt < 350L) {
+            return;
+        }
+        lastChimeAt = now;
+        Thread thread = new Thread(() -> playChime(kind), "attc-chime");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private static void playChime(int kind) {
+        try {
+            int rate = 24000;
+            double[] freqs;
+            int noteMs = 110;
+            int gapMs = 40;
+            if (kind == CHIME_DONE) {
+                freqs = new double[]{659.25, 880.0, 1318.51};
+                noteMs = 120;
+            } else if (kind == CHIME_ERROR) {
+                freqs = new double[]{440.0, 311.13};
+                noteMs = 150;
+                gapMs = 60;
+            } else {
+                freqs = new double[]{880.0, 1174.66};
+                noteMs = 90;
+                gapMs = 35;
+            }
+            int total = (freqs.length * (noteMs + gapMs) + 40) * rate / 1000;
+            short[] pcm = new short[total];
+            int pos = 0;
+            for (int n = 0; n < freqs.length; n++) {
+                double freq = freqs[n];
+                int count = noteMs * rate / 1000;
+                int attack = Math.max(1, rate / 250);
+                int release = Math.max(1, rate / 80);
+                for (int i = 0; i < count && pos < total; i++, pos++) {
+                    double env = Math.min(1.0, i / (double) attack);
+                    env = Math.min(env, (count - i) / (double) release);
+                    double wave = Math.sin(2.0 * Math.PI * freq * i / rate);
+                    pcm[pos] = (short) (wave * env * 0.30 * 32767.0);
+                }
+                pos += gapMs * rate / 1000;
+            }
+            AudioTrack track = new AudioTrack(AudioManager.STREAM_MUSIC, rate,
+                    AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT,
+                    pcm.length * 2, AudioTrack.MODE_STATIC);
+            track.write(pcm, 0, pcm.length);
+            track.play();
+            Thread.sleep(total * 1000L / rate + 120L);
+            track.stop();
+            track.release();
+            Logger.i("audio: chime " + kind + " samples=" + pcm.length);
+        } catch (Throwable t) {
+            Logger.i("audio: chime failed " + t);
+        }
+    }
+
     private static void close(ServerSocket socket) {
         if (socket != null) {
             try {

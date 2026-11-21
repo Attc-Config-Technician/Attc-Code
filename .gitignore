@@ -37,3 +37,7 @@ app/jni/libpty.so
 # Native build output
 build-native/
 app/jni/loader
+
+# Python bytecode
+__pycache__/
+*.pyc

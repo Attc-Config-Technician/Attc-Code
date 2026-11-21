@@ -97,7 +97,21 @@ public final class Session {
                 // EIO means the child finished; EBADF means we closed it.
                 break;
             }
+            boolean attention = false;
+            for (int i = 0; i < n; i++) {
+                if (buf[i] == 7) {
+                    attention = true;
+                    break;
+                }
+            }
+            if (!attention) {
+                attention = hasNotification(buf, n);
+            }
             Hub.push(this, buf, n);
+            OverlayService.noteOutput();
+            if (attention) {
+                AudioBridge.chime(AudioBridge.CHIME_ATTENTION);
+            }
         }
 
         int code = 0;
@@ -126,6 +140,7 @@ public final class Session {
         }
         closed = true;
         if (!quiet) {
+            OverlayService.noteDone();
             Hub.onSessionExit(this, code);
             Logger.i("pty exited code=" + code + "\n--- output tail ---\n" + Hub.tail()
                     + "\n--- end tail ---");
@@ -163,6 +178,22 @@ public final class Session {
         if (local >= 0 && !closed) {
             Pty.nativeResize(local, rows, cols);
         }
+    }
+
+    private static boolean hasNotification(byte[] buf, int n) {
+        for (int i = 0; i + 3 < n; i++) {
+            if (buf[i] != 27 || buf[i + 1] != 93) {
+                continue;
+            }
+            if (buf[i + 2] == 57 && buf[i + 3] == 59) {
+                return true;
+            }
+            if (i + 6 < n && buf[i + 2] == 55 && buf[i + 3] == 55
+                    && buf[i + 4] == 55 && buf[i + 5] == 59) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Asks the child to die; the reader thread reaps it and closes the fd. */

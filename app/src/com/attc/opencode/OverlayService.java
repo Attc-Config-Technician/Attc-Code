@@ -12,6 +12,7 @@ import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
+import android.graphics.Path;
 import android.graphics.PorterDuff;
 import org.json.JSONObject;
 import java.io.File;
@@ -60,6 +61,7 @@ public final class OverlayService extends Service {
     public static final String EXTRA_TEXT = "text";
     public static final String PREF_ENABLED = "overlay_enabled";
     public static final String PREF_ALPHA = "overlay_alpha";
+    public static final String PREF_SIZE = "overlay_size";
     public static final String PREF_X = "overlay_x";
     public static final String PREF_Y = "overlay_y";
 
@@ -69,6 +71,11 @@ public final class OverlayService extends Service {
 
     private static final String CHANNEL = "attc_activity";
     private static final int NOTIFICATION_ID = 21;
+    private static final int MODE_SLEEP = 0;
+    private static final int MODE_WORK = 1;
+    private static final int MODE_DONE = 2;
+    private static final long IDLE_DONE_MS = 6000L;
+    private static final long DONE_SHOW_MS = 6000L;
 
     private WindowManager wm;
     private SharedPreferences prefs;
@@ -82,6 +89,13 @@ public final class OverlayService extends Service {
     private TextView alphaButton;
     private EditText promptView;
     private int alpha = 92;
+    private int scalePercent = 60;
+    private float uiScale = 0.6f;
+    private volatile int workMode = MODE_SLEEP;
+    private long workStartedAt;
+    private long doneSince;
+    private static volatile OverlayService instance;
+    private static volatile long lastOutputAt;
     private int bubbleSize;
     private PointerView pointerView;
     private Thread pointerThread;
@@ -144,20 +158,38 @@ public final class OverlayService extends Service {
         }
     };
 
+    private final Runnable workTick = new Runnable() {
+        @Override
+        public void run() {
+            long now = System.currentTimeMillis();
+            if (workMode == MODE_WORK && lastOutputAt > 0L
+                    && now - lastOutputAt > IDLE_DONE_MS) {
+                markDone(false);
+            } else if (workMode == MODE_DONE && now - doneSince > DONE_SHOW_MS) {
+                setWorkMode(MODE_SLEEP);
+            }
+            handler.postDelayed(this, 300L);
+        }
+    };
+
     @Override
     public void onCreate() {
         super.onCreate();
         running = true;
+        instance = this;
         prefs = getSharedPreferences("settings", MODE_PRIVATE);
         alpha = clampAlpha(prefs.getInt(PREF_ALPHA, 92));
-        bubbleSize = dp(64);
+        scalePercent = clamp(prefs.getInt(PREF_SIZE, 60), 40, 100);
+        uiScale = scalePercent / 100f;
+        bubbleSize = Math.max(dp(30), Math.round(dp(64) * uiScale));
         createChannel();
         startForeground(NOTIFICATION_ID, notification());
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         addBubble();
         startPointerWatcher();
         handler.post(refresh);
-        Logger.i("overlay: service created alpha=" + alpha);
+        handler.post(workTick);
+        Logger.i("overlay: service created alpha=" + alpha + " size=" + scalePercent);
     }
 
     @Override
@@ -178,7 +210,16 @@ public final class OverlayService extends Service {
                 break;
             case ACTION_REFRESH:
                 alpha = clampAlpha(prefs.getInt(PREF_ALPHA, 92));
-                if (logoView != null) {
+                int newScale = clamp(prefs.getInt(PREF_SIZE, 60), 40, 100);
+                if (newScale != scalePercent) {
+                    scalePercent = newScale;
+                    uiScale = scalePercent / 100f;
+                    bubbleSize = Math.max(dp(30), Math.round(dp(64) * uiScale));
+                    Logger.i("overlay: size changed to " + scalePercent);
+                    collapse();
+                    removeBubbleView();
+                    addBubble();
+                } else if (logoView != null) {
                     logoView.invalidate();
                 }
                 if (panel != null) {
@@ -207,6 +248,7 @@ public final class OverlayService extends Service {
         running = false;
         visible = false;
         panelOpen = false;
+        instance = null;
         handler.removeCallbacksAndMessages(null);
         hideMenu();
         collapse();
@@ -235,6 +277,56 @@ public final class OverlayService extends Service {
         } catch (Throwable t) {
             Logger.i("overlay: start failed " + t);
         }
+    }
+
+    public static void noteOutput() {
+        lastOutputAt = System.currentTimeMillis();
+        OverlayService service = instance;
+        if (service != null && service.workMode != MODE_WORK) {
+            service.handler.post(service::beginWork);
+        }
+    }
+
+    public static void noteDone() {
+        OverlayService service = instance;
+        if (service != null) {
+            service.handler.post(() -> service.markDone(true));
+        }
+    }
+
+    private void beginWork() {
+        if (lastOutputAt == 0L) {
+            return;
+        }
+        workStartedAt = lastOutputAt;
+        setWorkMode(MODE_WORK);
+    }
+
+    private void markDone(boolean forceSound) {
+        if (workMode == MODE_DONE) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        boolean longTask = workStartedAt > 0L && now - workStartedAt >= 8000L;
+        setWorkMode(MODE_DONE);
+        if (forceSound || longTask) {
+            AudioBridge.chime(AudioBridge.CHIME_DONE);
+        }
+    }
+
+    private void setWorkMode(int mode) {
+        if (workMode == mode) {
+            return;
+        }
+        workMode = mode;
+        if (mode == MODE_DONE) {
+            doneSince = System.currentTimeMillis();
+        }
+        Logger.i("overlay: work mode " + mode);
+        if (logoView != null) {
+            logoView.setMode(mode);
+        }
+        refreshPanel();
     }
 
     private void addBubble() {
@@ -372,7 +464,7 @@ public final class OverlayService extends Service {
             hideMenu();
             stopSelf();
         }));
-        int width = dp(156);
+        int width = Math.max(dp(120), Math.round(dp(156) * uiScale));
         Point size = screen();
         int x = bubbleParams.x + bubbleSize + dp(8);
         if (x + width > size.x - dp(4)) {
@@ -433,7 +525,7 @@ public final class OverlayService extends Service {
         TextView title = new TextView(this);
         title.setText("Attc Code • canlı");
         title.setTextColor(0xFFE6EDF3);
-        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14 * textScale());
         title.setTypeface(Typeface.DEFAULT_BOLD);
         header.addView(title, new LinearLayout.LayoutParams(0,
                 LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
@@ -448,13 +540,13 @@ public final class OverlayService extends Service {
 
         statusView = new TextView(this);
         statusView.setTextColor(0xFF00E5A0);
-        statusView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        statusView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12 * textScale());
         statusView.setSingleLine(true);
         box.addView(statusView);
 
         outputView = new TextView(this);
         outputView.setTextColor(0xFF9FB0BF);
-        outputView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        outputView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11 * textScale());
         outputView.setMaxLines(3);
         outputView.setEllipsize(TextUtils.TruncateAt.END);
         outputView.setPadding(0, dp(4), 0, dp(8));
@@ -467,7 +559,7 @@ public final class OverlayService extends Service {
         promptView.setHint("Terminale yaz...");
         promptView.setHintTextColor(0xFF7D8B99);
         promptView.setTextColor(0xFFE6EDF3);
-        promptView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        promptView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13 * textScale());
         promptView.setSingleLine(true);
         promptView.setInputType(InputType.TYPE_CLASS_TEXT
                 | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
@@ -481,7 +573,7 @@ public final class OverlayService extends Service {
         TextView send = new TextView(this);
         send.setText("Gönder");
         send.setTextColor(0xFF00E5A0);
-        send.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        send.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13 * textScale());
         send.setTypeface(Typeface.DEFAULT_BOLD);
         send.setPadding(dp(12), dp(8), dp(2), dp(8));
         send.setOnClickListener(v -> send(promptView.getText().toString()));
@@ -498,7 +590,7 @@ public final class OverlayService extends Service {
         options.addView(alphaButton);
         box.addView(options);
 
-        int width = dp(310);
+        int width = Math.max(dp(200), Math.round(dp(310) * uiScale));
         Point size = screen();
         int x = bubbleParams.x + bubbleSize + dp(8);
         if (x + width > size.x - dp(8)) {
@@ -530,7 +622,7 @@ public final class OverlayService extends Service {
         TextView view = new TextView(this);
         view.setText(text);
         view.setTextColor(0xFF9FB0BF);
-        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11 * textScale());
         view.setPadding(0, dp(4), dp(16), dp(4));
         view.setOnClickListener(click);
         return view;
@@ -562,7 +654,11 @@ public final class OverlayService extends Service {
             statusView.setText("Oturum yok");
         } else {
             String state = session.label();
-            if (session.cliRunning()) {
+            if (workMode == MODE_WORK) {
+                state = state + " • çalışıyor • " + elapsed(session.cliStartedAt());
+            } else if (workMode == MODE_DONE) {
+                state = state + " • bitti ✓";
+            } else if (session.cliRunning()) {
                 state = state + " • çalışıyor • " + elapsed(session.cliStartedAt());
             } else {
                 state = state + " • hazır";
@@ -767,6 +863,10 @@ public final class OverlayService extends Service {
     private int dp(int value) {
         return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP,
                 value, getResources().getDisplayMetrics()));
+    }
+
+    private float textScale() {
+        return Math.max(0.78f, uiScale);
     }
 
     private void startPointerWatcher() {
@@ -1005,8 +1105,10 @@ public final class OverlayService extends Service {
 
     private final class LogoView extends View {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Path path = new Path();
         private final ValueAnimator animator;
         private float phase;
+        private int mode = MODE_SLEEP;
 
         LogoView(Context context) {
             super(context);
@@ -1019,6 +1121,14 @@ public final class OverlayService extends Service {
                 invalidate();
             });
             animator.start();
+        }
+
+        void setMode(int value) {
+            if (mode == value) {
+                return;
+            }
+            mode = value;
+            invalidate();
         }
 
         @Override
@@ -1041,14 +1151,25 @@ public final class OverlayService extends Service {
             float cy = h / 2f;
             float breath = 1f + 0.045f * (float) Math.sin(phase * Math.PI * 2.0);
             float radius = Math.min(w, h) / 2f - dpf(4f);
-            float r = radius * breath;
+            float r = radius * (mode == MODE_WORK
+                    ? 1f + 0.02f * (float) Math.sin(phase * Math.PI * 8.0) : breath);
 
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(tint(0x3300E5A0));
+            paint.setColor(tint(mode == MODE_DONE ? 0x4400E5A0 : 0x3300E5A0));
             canvas.drawCircle(cx, cy, r + dpf(4f), paint);
-            paint.setColor(tint(0xFF0B0F14));
+            paint.setColor(tint(mode == MODE_DONE ? 0xFF0E2A22 : 0xFF0B0F14));
             canvas.drawCircle(cx, cy, r, paint);
 
+            if (mode == MODE_WORK) {
+                drawWork(canvas, cx, cy, r);
+            } else if (mode == MODE_DONE) {
+                drawDone(canvas, cx, cy, r);
+            } else {
+                drawSleep(canvas, cx, cy, r);
+            }
+        }
+
+        private void drawSleep(Canvas canvas, float cx, float cy, float r) {
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(dpf(1.8f));
             paint.setColor(tint(0xFF00E5A0));
@@ -1086,6 +1207,78 @@ public final class OverlayService extends Service {
             paint.setTypeface(Typeface.DEFAULT_BOLD);
             paint.setColor(tint(0xAA00E5A0));
             canvas.drawText("z", cx + r * 0.48f, cy - r * 0.45f - r * 0.20f * phase, paint);
+        }
+
+        private void drawWork(Canvas canvas, float cx, float cy, float r) {
+            float spin = (phase * 360f) % 360f;
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(dpf(2.0f));
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            paint.setColor(tint(0x4000E5A0));
+            canvas.drawCircle(cx, cy, r, paint);
+            paint.setStrokeWidth(dpf(3.0f));
+            paint.setColor(tint(0xFFFFB020));
+            RectF ring = new RectF(cx - r, cy - r, cx + r, cy + r);
+            canvas.drawArc(ring, spin, 100f, false, paint);
+
+            float eyeY = cy - r * 0.10f;
+            float eyeDx = r * 0.30f;
+            float eyeR = r * 0.135f;
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(tint(0xFFE6EDF3));
+            canvas.drawCircle(cx - eyeDx, eyeY, eyeR, paint);
+            canvas.drawCircle(cx + eyeDx, eyeY, eyeR, paint);
+            float look = (float) Math.sin(phase * Math.PI * 4.0) * eyeR * 0.35f;
+            paint.setColor(tint(0xFF0B0F14));
+            canvas.drawCircle(cx - eyeDx + look, eyeY, eyeR * 0.48f, paint);
+            canvas.drawCircle(cx + eyeDx + look, eyeY, eyeR * 0.48f, paint);
+
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(dpf(1.8f));
+            paint.setColor(tint(0xFFFFB020));
+            RectF mouth = new RectF(cx - r * 0.14f, cy + r * 0.22f,
+                    cx + r * 0.14f, cy + r * 0.42f);
+            canvas.drawArc(mouth, 0f, 180f, false, paint);
+
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(tint(0xFFFFB020));
+            for (int i = 0; i < 3; i++) {
+                float a = (phase * 2f + i / 3f) % 1f;
+                canvas.drawCircle(cx + r * 0.55f, cy - r * 0.62f + r * 0.16f * i,
+                        r * (0.045f + 0.025f * a), paint);
+            }
+        }
+
+        private void drawDone(Canvas canvas, float cx, float cy, float r) {
+            float pulse = (float) Math.abs(Math.sin(phase * Math.PI * 2.0));
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(dpf(1.8f));
+            paint.setColor(tint(0xFF00E5A0));
+            canvas.drawCircle(cx, cy, r, paint);
+            paint.setStrokeWidth(dpf(2.2f));
+            paint.setColor(((int) (120 * (1f - pulse)) << 24) | 0x0000E5A0);
+            canvas.drawCircle(cx, cy, r + dpf(3f) + dpf(5f) * pulse, paint);
+
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(dpf(4.2f));
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            paint.setStrokeJoin(Paint.Join.ROUND);
+            paint.setColor(tint(0xFF00E5A0));
+            path.reset();
+            path.moveTo(cx - r * 0.38f, cy + r * 0.02f);
+            path.lineTo(cx - r * 0.08f, cy + r * 0.30f);
+            path.lineTo(cx + r * 0.42f, cy - r * 0.30f);
+            canvas.drawPath(path, paint);
+
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(tint(0xFFB9FFE4));
+            for (int i = 0; i < 4; i++) {
+                double a = Math.PI * 2.0 * i / 4.0 + phase * Math.PI * 2.0;
+                float sx = cx + (float) Math.cos(a) * r * 0.78f;
+                float sy = cy + (float) Math.sin(a) * r * 0.78f;
+                float size = r * (0.05f + 0.03f * pulse);
+                canvas.drawCircle(sx, sy, size, paint);
+            }
         }
     }
 }
