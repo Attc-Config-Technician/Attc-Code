@@ -20,3 +20,11 @@
 - app/src/com/attc/opencode/TerminalService.java: voiceCli aktif oturum; writeVoicePrompt duz terminalde ham komut.
 - app/src/com/attc/opencode/MainActivity.java: onboarding, Claude on kontrolu, tum terminaller icin mikrofon izni, ad.
 - app/res/values/strings.xml: app_name = Attc Code.
+
+## MCP final verification (2026-11-21)
+
+- OpenCode 2.3.2 accepts MCP servers at `mcp.servers.<name>` with `disabled: false`; the legacy `mcp.<name>` + `enabled: true` shape was ignored.
+- VoiceBridge now merges `mcp.servers.android`, removes the legacy key, copies `android-mcp.py`, and appends the `android_*` hint to AGENTS.md once.
+- Device log proof: `mcp connected server=android tools=13`.
+- Installed APK: 5.21.0 (90), sha256 `680a2faa24ec430d718cdf2a2db6e330253704b12efc6664ac632258f6a0ad7b`.
+- Commit: `99a835d`.
