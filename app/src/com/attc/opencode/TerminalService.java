@@ -325,7 +325,7 @@ public class TerminalService extends Service {
         Hub.buffer = new TerminalBuffer(24, 80);
         Hub.clearTail();
         Hub.setStatus("Starting...");
-        emit("Attc code");
+        emit("Attc Code");
         emit("Ubuntu + opencode inside the app.");
         emit("");
         runSetup();
@@ -1872,7 +1872,7 @@ public class TerminalService extends Service {
         }
         String cli = voiceCli();
         Session target = Hub.findByCli(cli);
-        if (target != null && target.isRunning() && target.cliRunning()) {
+        if (target != null && target.isRunning() && ("terminal".equals(cli) || target.cliRunning())) {
             activateSession(target);
             writeVoicePrompt(clean);
             return;
@@ -1892,31 +1892,45 @@ public class TerminalService extends Service {
     }
 
     private String voiceCli() {
-        String cli = prefs == null ? "" : prefs.getString(VoiceEngine.KEY_CLI, "");
-        if (cli == null || cli.isEmpty() || "terminal".equals(cli)) {
-            // The voice system is Antigravity-first: the wake word opens a
-            // running agy session, or starts one, instead of guessing the
-            // CLI that happened to be used last.
-            return "agy";
+            String configured = prefs == null ? "" : prefs.getString(VoiceEngine.KEY_CLI, "");
+            if (configured != null && !configured.isEmpty()) {
+                return configured;
+            }
+            Session active = Hub.session;
+            if (active != null && active.isRunning()) {
+                String cli = active.cli();
+                if (cli != null && !cli.isEmpty()) {
+                    return cli;
+                }
+            }
+            if (activeCli != null && !activeCli.isEmpty()) {
+                return activeCli;
+            }
+            return "opencode";
         }
-        return cli;
-    }
 
     private void writeVoicePrompt(String text) {
-        Session session = Hub.session;
-        if (session == null) {
-            pendingVoiceText = text;
-            return;
+            Session session = Hub.session;
+            if (session == null) {
+                pendingVoiceText = text;
+                return;
+            }
+            // A plain shell is not an AI CLI: send the sentence as a command,
+            // never as prose. This is what makes voice work in every terminal.
+            if ("terminal".equals(session.cli())) {
+                session.write(text.replace('\r', ' ').replace('\n', ' ') + "\r");
+                Logger.i("voice: command written to plain terminal");
+                return;
+            }
+            String prompt = "[SESLİ KOMUT] " + text
+                    + " — Telefonu kontrol etmek için bash'te attc-ctl kullanabilirsin"
+                    + " (Shizuku shell yetkisi). Örnek: attc-ctl \"am start -a"
+                    + " android.intent.action.VIEW -d 'https://music.youtube.com/search?q=...'\"."
+                    + " Ekran kapalıysa önce attc-ctl \"input keyevent 224\"."
+                    + " Kurulu uygulamayı attc-ctl \"pm list packages | grep -i ...\" ile bul.";
+            session.write(prompt + "\r");
+            Logger.i("voice: command written to pty");
         }
-        String prompt = "[SESLİ KOMUT] " + text
-                + " — Telefonu kontrol etmek için bash'te attc-ctl kullanabilirsin"
-                + " (Shizuku shell yetkisi). Örnek: attc-ctl \"am start -a"
-                + " android.intent.action.VIEW -d 'https://music.youtube.com/search?q=...'\"."
-                + " Ekran kapalıysa önce attc-ctl \"input keyevent 224\"."
-                + " Kurulu uygulamayı attc-ctl \"pm list packages | grep -i ...\" ile bul.";
-        session.write(prompt + "\r");
-        Logger.i("voice: command written to pty");
-    }
 
     private void flushPendingVoice() {
         final String text = pendingVoiceText;
@@ -1993,7 +2007,7 @@ public class TerminalService extends Service {
     private void createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
-                    CHANNEL, "Attc code session", NotificationManager.IMPORTANCE_LOW);
+                    CHANNEL, "Attc Code session", NotificationManager.IMPORTANCE_LOW);
             channel.setDescription("Keeps the Ubuntu terminal and opencode running.");
             channel.setShowBadge(false);
             NotificationManager nm = getSystemService(NotificationManager.class);
@@ -2019,7 +2033,7 @@ public class TerminalService extends Service {
         } else if (voiceEnabled()) {
             text = text + " • " + VoiceEngine.phrase(this) + " dinliyor";
         }
-        b.setContentTitle("Attc code")
+        b.setContentTitle("Attc Code")
                 .setContentText(text)
                 .setSmallIcon(android.R.drawable.ic_menu_manage)
                 .setOngoing(true)

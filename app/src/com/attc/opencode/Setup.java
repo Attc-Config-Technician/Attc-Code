@@ -292,7 +292,7 @@ public final class Setup {
             parent.mkdirs();
         }
         write(wrapper, "#!/bin/sh\n"
-                + "# Attc code launcher: run a private server so the shared\n"
+                + "# Attc Code launcher: run a private server so the shared\n"
                 + "# managed-service port (127.0.0.1:49374) cannot collide with\n"
                 + "# another app's opencode instance.\n"
                 + "# ATTC_WRAPPER_V4\n"
@@ -303,7 +303,7 @@ public final class Setup {
                 + "  upgrade|update)\n"
                 + "    mkdir -p \"/storage/emulated/0/ATTC OPENCODE\" 2>/dev/null\n"
                 + "    date > \"/storage/emulated/0/ATTC OPENCODE/update.request\" 2>/dev/null\n"
-                + "    echo \"Attc code: update queued, the app will install the latest opencode. Restart the terminal afterwards.\"\n"
+                + "    echo \"Attc Code: update queued, the app will install the latest opencode. Restart the terminal afterwards.\"\n"
                 + "    exit 0 ;;\n"
                 + "esac\n"
                 + "case \"${1-}\" in\n"

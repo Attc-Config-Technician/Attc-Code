@@ -149,6 +149,9 @@ public final class MainActivity extends Activity implements Hub.Listener {
         startTerminal();
         maybeStartFakeVpn();
         handleIntent(getIntent());
+        if (!prefs.getBoolean("onboarding_done", false)) {
+            uiHandler.postDelayed(this::showOnboarding, 900L);
+        }
         Hub.addListener(this);
         stage.post(this::maybeShowStartScreen);
     }
@@ -596,7 +599,7 @@ public final class MainActivity extends Activity implements Hub.Listener {
         bar.addView(titles, titleParams);
 
         TextView title = new TextView(this);
-        title.setText("Attc code");
+        title.setText("Attc Code");
         title.setTextColor(0xFFE6EDF3);
         title.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
         title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
@@ -901,7 +904,7 @@ public final class MainActivity extends Activity implements Hub.Listener {
         prefs.edit().putBoolean(KEY_STORAGE_ASKED, true).apply();
         new AlertDialog.Builder(this)
                 .setTitle("Shared folder access")
-                .setMessage("Attc code keeps your files in \"/storage/emulated/0/ATTC OPENCODE\". "
+                .setMessage("Attc Code keeps your files in \"/storage/emulated/0/ATTC OPENCODE\". "
                         + "Android needs \"All files access\" for that folder to be readable and "
                         + "writable from inside the Ubuntu terminal.\n\n"
                         + "You can grant it now, or later from the settings button.")
@@ -950,6 +953,46 @@ public final class MainActivity extends Activity implements Hub.Listener {
 
     // --------------------------------------------------------------- settings
 
+    /** Skippable first-run guide; reopenable from Settings. */
+    private void showOnboarding() {
+        final String[][] pages = {
+            {"Attc Code kullanım kılavuzu",
+             "Attc Code, Ubuntu 24.04 arm64 ortamını root gerektirmeden uygulama içinde açar. Dosyalarınız /storage/emulated/0/ATTC OPENCODE altında tutulur."},
+            {"CLI seçimi",
+             "Her CLI kendi PTY oturumunda çalışır: opencode, Claude Code, Antigravity, Codex, Kimi veya düz terminal. Claude Code için opencode kurulu olmalıdır."},
+            {"Ses ve izinler",
+             "Mikrofon ve hoparlör tüm terminal oturumlarında ortaktır. Sesli komut, hangi terminaldeyseniz oraya gider. İzinler ihtiyaç anında istenir."}
+        };
+        final int[] step = {0};
+        final AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(pages[0][0])
+                .setMessage(pages[0][1])
+                .setPositiveButton("İleri", null)
+                .setNegativeButton("Atla", null)
+                .setCancelable(false)
+                .create();
+        dialog.setOnShowListener(d -> {
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v -> {
+                prefs.edit().putBoolean("onboarding_done", true).apply();
+                dialog.dismiss();
+            });
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                step[0]++;
+                if (step[0] >= pages.length) {
+                    prefs.edit().putBoolean("onboarding_done", true).apply();
+                    dialog.dismiss();
+                    return;
+                }
+                dialog.setTitle(pages[step[0]][0]);
+                dialog.setMessage(pages[step[0]][1]);
+                if (step[0] == pages.length - 1) {
+                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setText("Başla");
+                }
+            });
+        });
+        dialog.show();
+    }
+
     private void showSettings() {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
@@ -957,6 +1000,8 @@ public final class MainActivity extends Activity implements Hub.Listener {
         box.setPadding(pad, dp(8), pad, dp(4));
 
         section(box, "Terminal");
+
+        box.addView(item("Kullanım kılavuzu", v -> showOnboarding()));
 
         CheckBox boot = new CheckBox(this);
         boot.setText("Start terminal on boot");
@@ -1003,13 +1048,19 @@ public final class MainActivity extends Activity implements Hub.Listener {
         box.addView(voiceToggle);
 
         note(box, "Private, offline wake word from three samples. The recognised "
-                + "sentence is typed into the selected CLI; speech to text may use "
-                + "the phone's recognition service.");
+                + "sentence is typed into the terminal you are using (opencode, "
+                + "Claude, Antigravity, Codex, Kimi or a plain shell). Every "
+                + "session shares the phone microphone and speaker; speech to "
+                + "text may use the phone recognition service.");
 
-        if (!VoiceEngine.hasPermission(this)) {
-            box.addView(item("Grant microphone permission",
-                    v -> requestVoicePermission()));
-        }
+        box.addView(item(VoiceEngine.hasPermission(this)
+                ? "Microphone: granted for all terminals"
+                : "Grant microphone permission (all terminals)",
+                v -> {
+                    if (!VoiceEngine.hasPermission(this)) {
+                        requestMicOnly();
+                    }
+                }));
 
         box.addView(item("Record \"" + VoiceEngine.phrase(this) + "\" again",
                 v -> recordWakeWord(voiceToggle)));
@@ -1257,6 +1308,15 @@ public final class MainActivity extends Activity implements Hub.Listener {
         requestPermissions(new String[]{PERM_RECORD_AUDIO}, REQ_VOICE_MIC);
     }
 
+    /** Requests the microphone without enabling the wake-word assistant. */
+    private void requestMicOnly() {
+        if (VoiceEngine.hasPermission(this)) {
+            return;
+        }
+        pendingEnableVoice = false;
+        requestPermissions(new String[]{PERM_RECORD_AUDIO}, REQ_VOICE_MIC);
+    }
+
     private void openAppSettings() {
         try {
             startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
@@ -1493,7 +1553,7 @@ public final class MainActivity extends Activity implements Hub.Listener {
         final String[] values = new String[VOICE_CLIS.length + 1];
         final String[] labels = new String[VOICE_CLIS.length + 1];
         values[0] = "";
-        labels[0] = "Antigravity (default)";
+        labels[0] = "Current terminal (default)";
         for (int i = 0; i < VOICE_CLIS.length; i++) {
             values[i + 1] = VOICE_CLIS[i];
             labels[i + 1] = SessionStore.label(VOICE_CLIS[i]);
@@ -1521,7 +1581,7 @@ public final class MainActivity extends Activity implements Hub.Listener {
     private String voiceCliLabel() {
         String cli = prefs.getString(VoiceEngine.KEY_CLI, "");
         if (cli == null || cli.isEmpty()) {
-            return "Antigravity (default)";
+            return "Current terminal (default)";
         }
         return SessionStore.label(cli);
     }
@@ -1591,7 +1651,7 @@ public final class MainActivity extends Activity implements Hub.Listener {
                 voiceToggle.setChecked(false);
             }
             suppressVoiceToggle = false;
-            Toast.makeText(this, "Microphone permission is required for voice activation",
+            Toast.makeText(this, "Microphone permission is required for terminal audio",
                     Toast.LENGTH_LONG).show();
         }
     }
@@ -1608,7 +1668,7 @@ public final class MainActivity extends Activity implements Hub.Listener {
                 + "  (upstream: " + Upstream.describe(this) + ")"
                 + (Egress.rotationBlocked(this)
                 ? "\nHint: the VPN app forbids bypass, so the exit cannot rotate. "
-                + "Turn it off or exclude Attc code in the VPN." : "");
+                + "Turn it off or exclude Attc Code in the VPN." : "");
     }
 
     /** Auto rotates between the radios; a fixed choice pins one exit. */
@@ -1930,6 +1990,9 @@ public final class MainActivity extends Activity implements Hub.Listener {
         if (intent != null && intent.getBooleanExtra("fstest", false)) {
             startService(new Intent(this, TerminalService.class)
                     .setAction(TerminalService.ACTION_FS_TEST));
+        }
+        if (intent != null && intent.getBooleanExtra("showguide", false)) {
+            uiHandler.postDelayed(this::showOnboarding, 300L);
         }
         if (intent != null && intent.getStringExtra("guestcmd") != null) {
             startService(new Intent(this, TerminalService.class)
@@ -2533,7 +2596,7 @@ public final class MainActivity extends Activity implements Hub.Listener {
         box.addView(mark, markParams);
 
         TextView title = new TextView(this);
-        title.setText("Attc code");
+        title.setText("Attc Code");
         title.setTextColor(0xFFE6EDF3);
         title.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
         title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24);
@@ -2630,6 +2693,13 @@ public final class MainActivity extends Activity implements Hub.Listener {
     }
 
     private void startCli(String cli, boolean showKeyboard) {
+        if ("claude".equals(cli)) {
+            Setup claudeSetup = new Setup(this);
+            if (claudeSetup.isRootfsReady() && !claudeSetup.opencode().exists()) {
+                showClaudeRequirement();
+                return;
+            }
+        }
         boolean consented = prefs.getBoolean(KEY_DOWNLOAD_CONSENT, false);
         if (!consented && new Setup(this).isRootfsReady()) {
             prefs.edit().putBoolean(KEY_DOWNLOAD_CONSENT, true).apply();
@@ -2664,6 +2734,15 @@ public final class MainActivity extends Activity implements Hub.Listener {
      * files that are not part of the APK. The root filesystem and the AI CLIs
      * are fetched from GitHub on first use, so ask once and explain it.
      */
+    /** Claude Code needs the opencode gateway binary; tell the user first. */
+    private void showClaudeRequirement() {
+        new AlertDialog.Builder(this)
+                .setTitle("opencode gerekli")
+                .setMessage("Claude Code, Attc Code içindeki opencode gateway olmadan çalışmaz. Önce opencode kurulumunun tamamlanması gerekir. Kurulum ilk açılışta otomatik yapılır.")
+                .setPositiveButton("Tamam", null)
+                .show();
+    }
+
     private void askDownloadConsent(final String cli, final boolean showKeyboard) {
         new AlertDialog.Builder(this)
                 .setTitle("İndirme onayı")
