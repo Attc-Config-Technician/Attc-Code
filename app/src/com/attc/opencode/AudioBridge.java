@@ -8,6 +8,8 @@ import android.media.AudioTrack;
 import android.media.MediaRecorder;
 import android.media.audiofx.AcousticEchoCanceler;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -70,6 +72,10 @@ public final class AudioBridge {
         Thread rec = new Thread(() -> serve(REC_PORT, false), "audio-rec");
         rec.setDaemon(true);
         rec.start();
+        Thread fifo = new Thread(() -> serveFifo(new File(new Setup(context).rootDir(),
+                "tmp/attc-audio.fifo").getAbsolutePath()), "audio-fifo");
+        fifo.setDaemon(true);
+        fifo.start();
         Logger.i("audio: bridge on 127.0.0.1:" + PLAY_PORT + "/" + REC_PORT);
     }
 
@@ -154,6 +160,113 @@ public final class AudioBridge {
             } catch (IOException ignored) {
             }
         }
+    }
+
+    /** Drains the ALSA FIFO that Setup.writeAsoundConfig points at. */
+    private static void serveFifo(String path) {
+        Logger.i("audio: fifo reader " + path);
+        while (started) {
+            try (FileInputStream in = new FileInputStream(path)) {
+                Logger.i("audio: fifo attached");
+                playFifo(in);
+                Logger.i("audio: fifo closed");
+            } catch (Throwable t) {
+                if (started) {
+                    Logger.i("audio: fifo " + t);
+                    sleep(200L);
+                }
+            }
+        }
+    }
+
+    /**
+     * Plays 48 kHz stereo s16le PCM from the FIFO. Silence is discarded so
+     * an idle miniaudio device does not keep an AudioTrack running forever;
+     * a fresh track starts when real samples arrive.
+     */
+    private static void playFifo(InputStream in) throws IOException {
+        final int rate = 48000;
+        final int channels = 2;
+        final int bytesPerFrame = channels * 2;
+        int channelMask = AudioFormat.CHANNEL_OUT_STEREO;
+        int min = AudioTrack.getMinBufferSize(rate, channelMask,
+                AudioFormat.ENCODING_PCM_16BIT);
+        int buffer = Math.max(min > 0 ? min : 4096, rate * channels * 2);
+        AudioTrack track = null;
+        byte[] data = new byte[8192];
+        long frames = 0;
+        long silent = 0;
+        int read;
+        while ((read = in.read(data)) > 0) {
+            boolean audible = hasSignal(data, read);
+            if (track == null) {
+                if (!audible) {
+                    continue;
+                }
+                track = new AudioTrack(AudioManager.STREAM_MUSIC, rate,
+                        channelMask, AudioFormat.ENCODING_PCM_16BIT, buffer,
+                        AudioTrack.MODE_STREAM);
+                track.play();
+                Logger.i("audio: fifo play start");
+            }
+            if (audible) {
+                silent = 0;
+            } else {
+                silent += read;
+                if (silent > (long) rate * bytesPerFrame * 2) {
+                    long deadline = System.currentTimeMillis() + 2000L;
+                    while (track.getPlaybackHeadPosition() < frames
+                            && System.currentTimeMillis() < deadline) {
+                        sleep(20L);
+                    }
+                    try {
+                        track.stop();
+                    } catch (Throwable ignored) {
+                    }
+                    track.release();
+                    track = null;
+                    frames = 0;
+                    silent = 0;
+                    Logger.i("audio: fifo play idle");
+                    continue;
+                }
+            }
+            int offset = 0;
+            while (offset < read) {
+                int written = track.write(data, offset, read - offset);
+                if (written < 0) {
+                    throw new IOException("audio: fifo write " + written);
+                }
+                if (written == 0) {
+                    sleep(5L);
+                    continue;
+                }
+                offset += written;
+                frames += written / bytesPerFrame;
+            }
+        }
+        if (track != null) {
+            long deadline = System.currentTimeMillis() + 3000L;
+            while (track.getPlaybackHeadPosition() < frames
+                    && System.currentTimeMillis() < deadline) {
+                sleep(20L);
+            }
+            try {
+                track.stop();
+            } catch (Throwable ignored) {
+            }
+            track.release();
+            Logger.i("audio: fifo play done frames=" + frames);
+        }
+    }
+
+    private static boolean hasSignal(byte[] data, int length) {
+        for (int i = 0; i < length; i++) {
+            if (data[i] != 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void serve(int port, boolean play) {

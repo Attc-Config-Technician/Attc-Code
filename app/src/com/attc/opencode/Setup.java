@@ -3,6 +3,7 @@ package com.attc.opencode;
 import android.content.Context;
 import android.content.Intent;
 import android.system.Os;
+import android.system.OsConstants;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -599,14 +600,27 @@ public final class Setup {
 
     /** DNS, hosts and a CA bundle so apt/curl/opencode TLS work inside Ubuntu. */
     /**
-     * Routes ALSA to the built-in null device so tools that ignore the PATH
-     * shims fail silently instead of flooding the terminal with ALSA errors.
-     * Playback and recording normally go through the audio shims in
-     * VoiceBridge, which forward PCM to AudioBridge over localhost.
+     * Points ALSA at a FIFO that AudioBridge drains, so programs that open
+     * the sound device directly (opencode's bundled miniaudio player, any
+     * notification player) are heard instead of failing or going silent.
+     * The "plug" layer normalises whatever format the app asks for to
+     * 48 kHz stereo s16le, which is what the reader expects. Tools that use
+     * the PATH shims in VoiceBridge keep using the socket path.
      */
     private void writeAsoundConfig(File etc) {
         String conf = "pcm.!default {\n"
-                + "    type null\n"
+                + "    type plug\n"
+                + "    slave {\n"
+                + "        pcm {\n"
+                + "            type file\n"
+                + "            slave.pcm \"null\"\n"
+                + "            file \"/tmp/attc-audio.fifo\"\n"
+                + "            format \"raw\"\n"
+                + "        }\n"
+                + "        format \"S16_LE\"\n"
+                + "        rate 48000\n"
+                + "        channels 2\n"
+                + "    }\n"
                 + "}\n"
                 + "ctl.!default {\n"
                 + "    type null\n"
@@ -616,6 +630,32 @@ public final class Setup {
             write(new File(root, "root/.asoundrc"), conf);
         } catch (IOException e) {
             Logger.i("asound.conf: " + e);
+        }
+    }
+
+    /** Creates the ALSA FIFO once; harmless if it already exists. */
+    private void ensureAudioFifo() {
+        File fifo = new File(root, "tmp/attc-audio.fifo");
+        try {
+            if (fifo.exists() && !isFifo(fifo)) {
+                //noinspection ResultOfMethodCallIgnored
+                fifo.delete();
+            }
+            if (!fifo.exists()) {
+                Os.mkfifo(fifo.getAbsolutePath(), 0666);
+                Logger.i("audio: fifo created " + fifo);
+            }
+        } catch (Throwable t) {
+            Logger.i("audio: fifo " + t);
+        }
+    }
+
+    private static boolean isFifo(File file) {
+        try {
+            int mode = Os.stat(file.getAbsolutePath()).st_mode;
+            return (mode & OsConstants.S_IFMT) == OsConstants.S_IFIFO;
+        } catch (Throwable t) {
+            return false;
         }
     }
 
@@ -641,6 +681,7 @@ public final class Setup {
         }
         installIpEchoCa(ca);
         writeAsoundConfig(etc);
+        ensureAudioFifo();
         enableSpoofOnce();
         releaseVpnSlotOnce();
         Plugins.installLocal(ctx, root);

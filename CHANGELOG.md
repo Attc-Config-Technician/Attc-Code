@@ -3,6 +3,24 @@
 All notable changes to Attc Code are documented here. Versions follow the
 `versionName` shipped in the APK; `versionCode` is in parentheses.
 
+## 5.22.0 (91) — 2026-11-25
+
+- **Sound from every CLI, not only the shims.** ALSA's default PCM now points
+  at a FIFO that `AudioBridge` drains, so programs that open the sound device
+  directly — opencode's bundled miniaudio player, notification players — are
+  heard on the phone instead of failing or going silent. The `plug` layer
+  normalises every request to 48 kHz stereo s16le; silence is discarded so an
+  idle device does not keep an `AudioTrack` open. Verified in the guest:
+  `aplay_exit=0` and `audio: fifo play done frames=48000`.
+- **Final CLI smoke check.** opencode 2.4.1, Claude Code 2.1.325, Codex CLI
+  0.169.0, Antigravity 1.5.14 and Kimi 2.6.3 all answer `--version` and
+  `--help`, and each one starts and stays open in a real PTY.
+- This build also includes the 5.21 work: the floating mascot with
+  sleep/work/done states, terminal chimes on BEL and OSC 9/777, the smaller
+  overlay with a 40–100% size setting, the Attc Code rename, onboarding,
+  voice in every terminal, Android MCP control, the live pointer overlay and
+  the GitHub update check.
+
 ## 5.20.0 (89) — 2026-11-20
 
 - **Several CLIs at once.** Every pick now gets its own PTY, terminal buffer
